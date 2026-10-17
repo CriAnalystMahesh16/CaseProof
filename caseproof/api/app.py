@@ -510,6 +510,21 @@ def create_app(settings=None):
             raise KeyError("delivered packet missing")
         return json.loads(row[0])
 
+    @app.get("/v1/cases/{case_id}/delivered-packets/{packet_id}/document")
+    def handoff_document(case_id: str, packet_id: str, actor=Depends(identity)):
+        from caseproof.domain.handoff_document import render_document
+
+        packet = delivered_packet(case_id, packet_id, actor)
+        return Response(
+            render_document(packet),
+            media_type="text/html",
+            headers={
+                "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
+                "Content-Disposition": 'attachment; filename="caseproof-handoff.html"',
+            },
+        )
+
     @app.post("/v1/cases/{case_id}/urgent-referrals")
     def referral_approval(case_id: str, body: ReferralReview, actor=Depends(identity)):
         authorised(case_id, actor)
@@ -631,6 +646,12 @@ def create_app(settings=None):
             body.disposition,
             body.reason,
         )
+
+    @app.get("/v1/ui-config")
+    def frontend_config():
+        from caseproof.api.ui_views import ui_config
+
+        return ui_config()
 
     @app.get("/v1/cases/{case_id}/report-preview")
     def report_preview(case_id: str, actor=Depends(identity)):

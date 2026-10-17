@@ -79,6 +79,7 @@ it("covers every analyst tab and finishes on a summary", () => {
       tab,
     ).toBe(true);
   expect(STEPS.at(-1).id).toBe("finish");
+  expect(STEPS.length).toBeLessThanOrEqual(12);
 });
 
 it("opens at the golden-hour introduction and moves forward and back", () => {
@@ -102,11 +103,13 @@ it("closes with Escape and resumes from the same step", () => {
   expect(screen.getByText(STEPS[3].title)).toBeTruthy();
 });
 
-it("jumps straight to an analyst chapter", () => {
+it("jumps straight to an analyst chapter", async () => {
   render(<TourOverlay />);
   act(() => tour.start(0));
-  fireEvent.change(screen.getByLabelText("Jump to chapter"), {
-    target: { value: "trail" },
+  await act(async () => {
+    fireEvent.change(screen.getByLabelText("Jump to chapter"), {
+      target: { value: "trail" },
+    });
   });
   expect(screen.getByRole("heading", { name: "Money trail" })).toBeTruthy();
 });

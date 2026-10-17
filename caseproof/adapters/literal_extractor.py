@@ -69,15 +69,25 @@ class LiteralExtractor:
                     add(s, "amount", int(Decimal(m[1].replace(",", "")) * 100))
             if re.search(r"\u20b9|\bRs\.?(?=\s|\d|$)|\bINR(?=\s|\d|$)", t, re.I):
                 add(s, "currency", "INR")
-            m = re.search(r"\b(20\d{2}-\d{2}-\d{2})(?:[ T]+(?:at\s+|around\s+)?(\d{2}:\d{2}))?", t)
+            m = re.search(
+                r"\b(20\d{2}-\d{2}-\d{2})(?:[ T]+(?:at\s+|around\s+)?"
+                r"(\d{2}:\d{2})(?::(\d{2}))?(Z|[+-]\d{2}:?\d{2})?)?",
+                t,
+            )
             if m:
-                add(s, "txn_datetime", m[1] + ("T" + m[2] + ":00+05:30" if m[2] else ""))
+                zone = m[4] or "+05:30"
+                if zone == "Z":
+                    zone = "+00:00"
+                elif len(zone) == 5:
+                    zone = zone[:3] + ":" + zone[3:]
+                value = m[1] + ("T" + m[2] + ":" + (m[3] or "00") + zone if m[2] else "")
+                add(s, "txn_datetime", value)
             # OCR can insert spaces inside an identifier. Join only a labelled
             # payee line; the value guard still requires the full value in that line.
             payee_text = t
             if re.match(r"^(?:To|Payee):\s*", t, re.I):
                 payee_text = re.sub(r"\s+", "", re.sub(r"^(?:To|Payee):\s*", "", t, flags=re.I))
-            for m in re.finditer(r"[a-zA-Z0-9_.+-]+@fictional\.invalid", payee_text):
+            for m in re.finditer(r"[a-zA-Z0-9_.+-]+@fictional\.invalid", payee_text, re.I):
                 add(s, "payee_vpa", m[0].lower())
             for m in re.finditer(r"\bSYNTH-(?:TX|REF)-[A-Z0-9]+(?:-[A-Z0-9]+)*\b", t):
                 if m[0].startswith(("SYNTH-TX-", "SYNTH-REF-")):

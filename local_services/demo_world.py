@@ -57,10 +57,10 @@ ADMIN = SimpleNamespace(role="admin", tenant_id="demo")
 class DemoWorld:
     def __init__(self, o, session_id=None):
         self.o = o
-        self.namespace = "PRELOADED" if session_id is None else "SESSION-" + session_id
+        self.namespace = "PRELOADED-V3" if session_id is None else "SESSION-" + session_id
         self.archive = o.s.data_dir / "demo_worlds"
         self.path = (
-            o.s.data_dir / "preloaded_world_v1.json"
+            o.s.data_dir / "preloaded_world_v3.json"
             if session_id is None
             else self.archive / (session_id + ".json")
         )
@@ -71,11 +71,11 @@ class DemoWorld:
             if self.path.exists():
                 return json.loads(self.path.read_text())
             people, ids = [], []
-            # One bank connection for setup and all six networks: otherwise the shared
+            # One bank connection for setup and all practice networks: otherwise the shared
             # bank store is opened and locked about thirty times (B11 latency).
             with DuckDBBank(self.o.s.duckdb_path).connect():
                 network = BankNetwork(self.o)
-                for index in range(6):
+                for index in range(len(NAMES)):
                     nid = f"CEDAR-{self.namespace}-{index + 1}"
                     # Generate once, remap downstream institutions, then import through the
                     # existing immutable bank contract. No complaint is created here.
@@ -92,8 +92,7 @@ class DemoWorld:
                         raw = raw.replace("Lotus Demo Bank", BANKS[1 + index * 2 % 9])
                         raw = raw.replace("Tulip Demo Bank", BANKS[1 + (index * 2 + 1) % 9])
                         saved = json.loads(raw)
-                    for j, customer in enumerate(saved["dataset"]["customers"]):
-                        customer["display_name"] = NAMES[index * 2 + j] + " (synthetic)"
+                    saved["dataset"]["customers"][0]["display_name"] = NAMES[index] + " (synthetic)"
                     saved["manifest"]["customers"] = saved["dataset"]["customers"]
                     from caseproof.api.bank_contracts import BankBatch
                     from caseproof.domain.contracts import hash_json
@@ -115,7 +114,7 @@ class DemoWorld:
                         )
                     ids.append(nid)
             world = {
-                "version": 1,
+                "version": 3,
                 "synthetic": True,
                 "banks": BANKS,
                 "customers": people,
@@ -136,8 +135,13 @@ class DemoWorld:
                 marker.unlink()  # Exactly one claimant succeeds.
             except FileNotFoundError:
                 continue
-            if DemoWorld(o, marker.name).path.exists():
-                return marker.name
+            world = DemoWorld(o, marker.name)
+            if world.path.exists():
+                saved = json.loads(world.path.read_text())
+                # Never rewrite immutable ledger timestamps to restart the golden hour.
+                # Old worlds remain archived, but are not assigned to new visitors.
+                if saved.get("version") == 3 and 0 <= time.time() - saved["created_at"] < 15 * 60:
+                    return marker.name
         return None
 
     @staticmethod
@@ -159,7 +163,12 @@ class DemoWorld:
 
     def worlds(self):
         active = self.ensure()
-        return [active] + [json.loads(p.read_text()) for p in self.archive.glob("*.json")]
+        legacy = self.o.s.data_dir / "preloaded_world_v1.json"
+        return (
+            [active]
+            + ([json.loads(legacy.read_text())] if legacy.exists() else [])
+            + [json.loads(p.read_text()) for p in self.archive.glob("*.json")]
+        )
 
     def customer(self, account):
         for world in self.worlds():

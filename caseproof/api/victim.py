@@ -25,6 +25,8 @@ from sqlalchemy import text
 from caseproof.adapters.customer_links import CustomerLinks
 from caseproof.adapters.duckdb_bank import DuckDBBank
 from caseproof.adapters.sqlite_casestore import ConflictError
+from caseproof.api.demo_evidence import SampleEvidence, capabilities, render_sample
+from caseproof.api.ui_views import victim_receipt
 from caseproof.domain.contracts import hash_json, now
 from local_services.demo_world import ADMIN, DemoWorld
 
@@ -183,6 +185,25 @@ def install(app, o):
         response.headers["Cache-Control"] = "no-store"
         return {"synthetic": True}
 
+    @router.get("/v1/victim/sample-evidence")
+    def sample_capabilities(person=Depends(customer)):
+        return capabilities(o)
+
+    @router.post("/v1/victim/sample-evidence")
+    def sample_evidence(body: SampleEvidence, person=Depends(customer)):
+        transaction = next(
+            (
+                t
+                for t in DuckDBBank(o.s.duckdb_path).transactions(person["account"])
+                if t["txn_id"] == body.transaction_id
+            ),
+            None,
+        )
+        if transaction is None:
+            raise PermissionError("payment not owned")
+        image, generator = render_sample(o, person["account"], transaction, body)
+        return Response(image, media_type="image/png", headers={"X-CaseProof-Generator": generator})
+
     @router.get("/v1/victim/me")
     def me(person=Depends(customer)):
         transactions = DuckDBBank(o.s.duckdb_path).transactions(person["account"])
@@ -255,6 +276,9 @@ def install(app, o):
                 + "\nVictim reports suspected scam; payment authorisation account: "
                 + body.payment_authorisation
             )
+            from caseproof.domain.intake_priority import record_intake_priority
+
+            record_intake_priority(o, cid, [transactions[t] for t in body.transaction_ids])
             # Content-addressed intake is safe to repeat after interrupted creation.
             o.intake.add(cid, note.encode(), "text/plain", "narrative")
             snap = o.store.get(cid)
@@ -313,6 +337,7 @@ def install(app, o):
             "evidence_count": len(snap.artifacts),
             "candidate_payments": [t.model_dump() for t in snap.unreported],
             "note": "A report acknowledgement does not mean money is held or recovered.",
+            **victim_receipt(o, cid, snap),
         }
 
     @router.post("/v1/victim/complaints/{cid}/payments")

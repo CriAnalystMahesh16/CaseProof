@@ -34,14 +34,20 @@ import {
   clearJournal,
   submitReport,
 } from "../../features/victim/submission.js";
+import { auth } from "../../api/auth.js";
+import SampleEvidence from "./SampleEvidence.jsx";
 import { TourButton } from "../../tour/Tour.jsx";
 
 export default function Victim({ route }) {
   const parts = route.split("/");
+  const { setPersona } = useSession();
   return (
     <div className="victim-app">
       <header className="victim-header">
-        <button className="brand-button row gap10" onClick={() => go("/entry")}>
+        <button
+          className="brand-button row gap10"
+          onClick={() => location.assign("/")}
+        >
           <span className="logo-mark">
             <LogoMark />
           </span>
@@ -52,12 +58,29 @@ export default function Victim({ route }) {
         </button>
         <div className="row gap8">
           <TourButton />
+          {auth.personas && (
+            <button
+              className="btn sm"
+              onClick={() => {
+                setPersona("analyst");
+                go("/staff/queue");
+              }}
+            >
+              Analyst demo
+            </button>
+          )}
           <Badge tone="warn">Synthetic demonstration</Badge>
         </div>
       </header>
       <div className="victim-layout">
         <aside className="victim-guide">
           <h2>A clear next step, at your pace.</h2>
+          <p>
+            <b>Why report promptly?</b> The golden hour is the first 60 minutes
+            after a payment. The server uses payment timestamps to prioritise
+            the response; AI does not decide the clock. Reporting promptly
+            cannot guarantee recovery.
+          </p>
           <ol>
             <li>Choose your payments</li>
             <li>Tell us what happened</li>
@@ -95,8 +118,8 @@ export default function Victim({ route }) {
         <span>
           We never ask for OTP, PIN, password or remote access.
           <br />
-          Fictional accounts and local assessment. A report does not guarantee
-          recovery.
+          Fictional accounts and source-linked assessment. A report does not
+          guarantee recovery.
         </span>
       </footer>
     </div>
@@ -324,6 +347,12 @@ function Home() {
           Tell us which payments concern you. You can return here for updates
           and focused questions.
         </p>
+        <p className="banner info">
+          For a golden-hour practice case, start a fresh session and report the
+          recent safe-account payment. Its downstream bank records are prepared
+          independently of your report. Older payments remain reportable; their
+          first-hour window will show as elapsed.
+        </p>
       </div>
       <div className="row gap8 wrap victim-actions">
         <button
@@ -396,7 +425,9 @@ function Payment({ t, children }) {
         <Landmark size={17} />
       </span>
       <div className="grow">
-        <b>{t.payee_vpa || t.to_account || t.beneficiary || t.txn_id}</b>
+        <b>
+          {t.payee || t.payee_vpa || t.to_account || t.beneficiary || t.txn_id}
+        </b>
         <small className="muted">{time(t.ts)}</small>
         <small className="mono muted">{t.reference || t.txn_id}</small>
         {suspicious && (
@@ -639,6 +670,12 @@ function Report() {
                 initial attachments; narrative uses the sixth slot. Total case
                 limit 20 MiB. PDF is not supported.
               </p>
+              <SampleEvidence
+                selected={selected}
+                narrative={narrative}
+                setFiles={setFiles}
+                count={files.length}
+              />
               <label className="upload-zone">
                 <Upload size={24} />
                 <b>Choose actual evidence files</b>
@@ -775,6 +812,7 @@ function UploadList({ files, setFiles }) {
   );
 }
 function Complaint({ caseId }) {
+  const { setPersona } = useSession();
   const resource = useResource(
       "victim-case:" + caseId,
       (signal) => apiRequest("/v1/victim/complaints/" + caseId, { signal }),
@@ -820,6 +858,17 @@ function Complaint({ caseId }) {
                 </span>
                 <div className="grow">
                   <h2>Report registered</h2>
+                  {auth.personas && (
+                    <button
+                      className="btn primary"
+                      onClick={() => {
+                        setPersona("analyst");
+                        go(`/staff/cases/${caseId}/overview`);
+                      }}
+                    >
+                      Continue as analyst demo <ArrowRight size={14} />
+                    </button>
+                  )}
                   <p>{c.status}</p>
                 </div>
                 <Status value={c.processing?.state} />

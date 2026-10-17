@@ -11,7 +11,7 @@
 //   example  text the visitor can insert into the narrative field
 
 export const EXAMPLE_NARRATIVE =
-  "At about 10:00 today a man called saying he was from Cedar Bank's fraud team. " +
+  "Shortly before the selected payment, a man called saying he was from Cedar Bank's fraud team. " +
   "He said my account was compromised and told me to move my money to a safe account " +
   "he gave me. I made the payment while he stayed on the call. Afterwards he stopped " +
   "answering. I did not share any OTP or PIN.";
@@ -32,7 +32,7 @@ export const CHAPTERS = {
   audit: "Audit",
 };
 
-export const STEPS = [
+const ALL_STEPS = [
   {
     id: "intro",
     chapter: "intro",
@@ -495,3 +495,96 @@ export const STEPS = [
     ],
   },
 ];
+
+// Twelve decision points. Ordinary controls remain discoverable outside the tour.
+const HIGHLIGHTS = [
+  "intro",
+  "practice",
+  "narrative",
+  "evidence",
+  "registered",
+  "brief",
+  "originals",
+  "graph",
+  "engine",
+  "readiness",
+  "delivery",
+  "finish",
+];
+export const STEPS = HIGHLIGHTS.map((id) => {
+  const step = ALL_STEPS.find((item) => item.id === id);
+  if (id === "brief")
+    return { ...step, go: caseTab("overview"), needsCase: true };
+  if (id === "registered")
+    return {
+      ...step,
+      action:
+        "Choose Continue as analyst demo to open this exact case. Next also opens its overview.",
+    };
+  if (id === "graph")
+    return {
+      ...step,
+      body: [
+        "Bank-observed transfers form the trail. Follow each debit separately and select an account to inspect its source and observation time. Unknown availability stays explicit; an observation is not a confirmed hold or recovery.",
+      ],
+    };
+  if (id === "readiness")
+    return {
+      ...step,
+      body: [
+        "Server rules decide eligibility separately for an urgent referral and a complete handoff. Resolve the relevant gaps first; model confidence never grants approval.",
+        "Only an authorised reviewer can approve the current revision and digest, with a written reason. In practice mode, use the labelled demo identity menu to switch to Reviewer.",
+      ],
+      action:
+        "Inspect the draft and current revision. Review as Reviewer demo only when eligible.",
+    };
+  if (id === "delivery")
+    return {
+      ...step,
+      body: [
+        "Send the approved content, then wait for both simulator acknowledgements. A queued export or one receipt is not complete delivery.",
+        "Assign a follow-up owner and next action. Delivery is a handoff, not a freeze, refund or closed investigation.",
+      ],
+      action:
+        "Inspect the original packet or download its readable document. Keep follow-up open.",
+    };
+  if (id === "practice")
+    return {
+      ...step,
+      body: [
+        "Start a fresh practice session, select any customer, then Report a payment scam. Choose the recent safe-account payment. Each profile has its own bank-backed example; unrelated payments stay separate.",
+      ],
+      action:
+        "Start fresh, choose a customer and select the scam payment; continue to the narrative.",
+      advance: { selector: at("report-narrative") },
+    };
+  if (id === "intro")
+    return {
+      ...step,
+      body: [
+        "Follow a fresh payment-scam report from the customer to a cited brief, an observed money trail and a reviewed handoff. Twelve highlights explain the decisions that matter.",
+        "Golden-hour priority comes from bank payment timestamps and server rules. A quicker report is useful, but never promises recovery. All accounts and destinations in this practice are fictional.",
+      ],
+    };
+  if (id === "evidence")
+    return {
+      ...step,
+      body: [
+        "Upload your own supported screenshots, chat, call log or receipt. You can also create a clearly labelled synthetic sample for the selected bank payment. Receiving a file is not completed extraction.",
+      ],
+      action:
+        "Attach relevant evidence, continue, review and submit the report.",
+      advance: { route: /^\/victim\/complaints\// },
+    };
+  if (id === "finish")
+    return {
+      ...step,
+      go: caseTab("audit"),
+      needsCase: true,
+      body: [
+        "The output is a cited investigation brief and a revision-bound, approved handoff packet with sourced trail positions, two delivery receipts and a follow-up owner. Delivery does not establish a freeze or refund.",
+        "Inspect audit and approval history here. You can revisit any chapter, or start another fresh complaint with a different customer.",
+      ],
+    };
+  return step;
+});

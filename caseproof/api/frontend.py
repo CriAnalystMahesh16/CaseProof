@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 
 import httpx
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
@@ -25,6 +25,10 @@ def integrate_frontend(api, directory=None):
             raise RuntimeError("Built frontend index.html is required")
 
     async def home(request):
+        if directory is not None and (directory / "landing/index.html").is_file():
+            return FileResponse(
+                directory / "landing/index.html", headers={"Cache-Control": "no-cache"}
+            )
         return RedirectResponse("/app/#/entry", status_code=303)
 
     async def customer(request):

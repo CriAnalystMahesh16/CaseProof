@@ -246,6 +246,11 @@ def test_new_cloud_complaint_request_reply_approval_and_two_deliveries(tmp_path,
     o, tasks, receiver, clean = runtime(tmp_path, monkeypatch)
     actor = Actor(user_id="bank-simulator", role="admin", tenant_id="demo")
     world = CloudBankNetwork(o).seed_tenant(actor)
+    from local_services.demo_world import NAMES
+
+    assert [c["display_name"] for c in world["customers"]] == [
+        name + " (synthetic)" for name in NAMES
+    ]
     o.store.documents.transact(
         lambda tx: tx.set(
             "demo_catalogues/" + identity("demo"), {"tenant": "demo", "catalogue": world}

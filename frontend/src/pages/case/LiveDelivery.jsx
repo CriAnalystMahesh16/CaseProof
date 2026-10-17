@@ -170,6 +170,26 @@ export default function Delivery({ view, reload, stale }) {
                     >
                       Download JSON
                     </button>
+                    <button
+                      className="btn sm"
+                      onClick={() =>
+                        run(async () => {
+                          const response = await apiRequest(
+                            root +
+                              "/delivered-packets/" +
+                              encodeURIComponent(d.packet_id) +
+                              "/document",
+                            { persona, raw: true },
+                          );
+                          download(
+                            await response.blob(),
+                            d.packet_id + ".html",
+                          );
+                        })
+                      }
+                    >
+                      Download handoff document
+                    </button>
                   </div>
                 </div>
               ))}

@@ -10,3 +10,16 @@ export function queueChanges(previous, current) {
         : [];
   });
 }
+
+// A visitor switching from reporting to staff did not have the queue open at
+// arrival. Surface current server priority without pretending it arrived now.
+export function initialPriorityAlerts(rows) {
+  return rows
+    .filter(
+      (row) =>
+        row.clock?.golden_hour_remaining > 0 &&
+        !["completed", "approved"].includes(row.status) &&
+        row.followup?.state !== "awaiting_external",
+    )
+    .map((row) => ({ ...row, type: "priority" }));
+}

@@ -38,7 +38,7 @@ import { formatMinor, time, remaining, label } from "./models/caseView.js";
 import Queue from "./pages/LiveQueue.jsx";
 import CasePages from "./pages/CasePages.jsx";
 import { auth } from "./api/auth.js";
-import { queueChanges } from "./models/queue.js";
+import { queueChanges, initialPriorityAlerts } from "./models/queue.js";
 import StaffSignIn from "./components/StaffSignIn.jsx";
 import Victim from "./pages/victim/Victim.jsx";
 import { TourButton } from "./tour/Tour.jsx";
@@ -94,7 +94,7 @@ function Entry() {
             <Compass size={16} /> Take the guided tour
           </button>
           <span className="muted">
-            About six minutes · one golden-hour scam, from report to handoff
+            12 highlights · one golden-hour scam, from report to handoff
           </span>
         </div>
         <div className="entry-options">
@@ -126,7 +126,7 @@ function Entry() {
           </button>
         </div>
         <div className="entry-foot">
-          <Landmark size={15} /> Fictional accounts · local processing ·
+          <Landmark size={15} /> Fictional accounts · source-linked assessment ·
           simulated report destinations
         </div>
       </div>
@@ -148,7 +148,10 @@ function Staff({ route }) {
     [showAlerts, setShowAlerts] = useState(false);
   useEffect(() => {
     if (!queue.data) return;
-    const changes = queueChanges(previous.current, queue.data.cases || []);
+    const changes =
+      previous.current === null
+        ? initialPriorityAlerts(queue.data.cases || [])
+        : queueChanges(previous.current, queue.data.cases || []);
     previous.current = queue.data.cases || [];
     if (changes.length)
       setAlerts((old) =>
@@ -178,7 +181,10 @@ function Staff({ route }) {
   return (
     <div className={"app studio-app " + (menu ? "menu-open" : "")}>
       <aside className="side">
-        <button className="logo brand-button" onClick={() => go("/entry")}>
+        <button
+          className="logo brand-button"
+          onClick={() => location.assign("/")}
+        >
           <span className="logo-mark">
             <LogoMark />
           </span>
@@ -289,9 +295,11 @@ function Staff({ route }) {
                     }}
                   >
                     <b>
-                      {a.type === "arrived"
-                        ? "New complaint received"
-                        : "Case status changed"}
+                      {a.type === "priority"
+                        ? "Golden-hour case awaiting response"
+                        : a.type === "arrived"
+                          ? "New complaint received"
+                          : "Case status changed"}
                     </b>
                     <span className="mono">{a.case_id}</span>
                     <small>{label(a.status)}</small>
@@ -328,11 +336,17 @@ function Staff({ route }) {
           </span>
         </header>
         <main className="content" id="content">
-          {alerts.some((a) => !a.seen && a.type === "arrived") && (
+          {alerts.some(
+            (a) => !a.seen && ["arrived", "priority"].includes(a.type),
+          ) && (
             <div className="arrival-notice" role="status">
               <Bell size={16} />
-              <b>New complaint received</b>
-              <span>The queue has updated.</span>
+              <b>
+                {alerts.some((a) => !a.seen && a.type === "priority")
+                  ? "Golden-hour case awaiting response"
+                  : "New complaint received"}
+              </b>
+              <span>Review the current bank-timed response priority.</span>
               <button
                 className="btn sm right"
                 onClick={() => {
@@ -402,7 +416,11 @@ function Case({ caseId, tab }) {
                 <h1>Investigation brief</h1>
                 <Status value={view.workflow.status} />
                 <Badge tone="warn">
-                  {remaining(countdown)} · response priority
+                  {countdown == null
+                    ? "Payment time not established"
+                    : countdown > 0
+                      ? `${remaining(countdown)} · golden hour remaining`
+                      : "Golden-hour window elapsed"}
                 </Badge>
               </div>
               <div className="muted">

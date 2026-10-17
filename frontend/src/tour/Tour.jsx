@@ -202,7 +202,7 @@ function ActiveTour({ state }) {
   }, []);
 
   const position = place(rect);
-  const chapterIds = Object.keys(CHAPTERS);
+  const chapterIds = [...new Set(STEPS.map((item) => item.chapter))];
   const chapterStart = (chapter) =>
     STEPS.findIndex((candidate) => candidate.chapter === chapter);
 

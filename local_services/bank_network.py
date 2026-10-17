@@ -66,6 +66,28 @@ class BankNetwork:
             raise ValueError("scam timing must be 5-240 minutes ago")
         scale = minutes_ago / 30
         prefix = "SIM-" + hash_json([tenant, network_id, seed])[:10].upper()
+        # Encode the same independent 40-bit identity as readable words for the
+        # human-facing VPA. Hexadecimal payment names let random zero/O OCR
+        # ambiguity dominate the practice; internal IDs and references stay exact.
+        words = (
+            "acre",
+            "beam",
+            "fern",
+            "gate",
+            "haze",
+            "jade",
+            "keen",
+            "moss",
+            "nest",
+            "path",
+            "reed",
+            "teal",
+            "vale",
+            "wave",
+            "yarn",
+            "zeal",
+        )
+        payee_token = "-".join(words[int(char, 16)] for char in prefix[4:].lower())
         now = datetime.now(timezone(timedelta(hours=5, minutes=30))).replace(
             second=0, microsecond=0
         )
@@ -115,7 +137,7 @@ class BankNetwork:
                 customer,
                 mule,
                 first_amount,
-                "safe-" + prefix.lower() + "@fictional.invalid",
+                "safe-" + payee_token + "@fictional.invalid",
                 30,
                 incident,
             ),
@@ -124,7 +146,7 @@ class BankNetwork:
                 customer,
                 second,
                 extra_amount,
-                "refund-" + prefix.lower() + "@fictional.invalid",
+                "refund-" + payee_token + "@fictional.invalid",
                 20,
                 incident,
             ),

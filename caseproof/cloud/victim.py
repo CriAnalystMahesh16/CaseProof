@@ -11,6 +11,9 @@ from caseproof.adapters.bank_factory import bank_services
 from caseproof.adapters.firestore_casestore import identity
 from caseproof.adapters.sqlite_casestore import ConflictError
 from caseproof.api.victim import Complaint, PaymentDecision, PracticeScenario, Session
+
+from caseproof.api.demo_evidence import SampleEvidence, capabilities, render_sample
+from caseproof.api.ui_views import victim_receipt
 from caseproof.cloud.bank_network import CloudBankNetwork
 from caseproof.domain.contracts import CaseSnapshot, hash_json, now
 
@@ -176,6 +179,26 @@ def install(app, o):
         same_origin(request)
         return intake_assist(o, person["tenant"], body.narrative)
 
+    @app.get("/v1/victim/sample-evidence")
+    def sample_capabilities(person=Depends(customer)):
+        return capabilities(o)
+
+    @app.post("/v1/victim/sample-evidence")
+    def sample_evidence(body: SampleEvidence, request: Request, person=Depends(customer)):
+        same_origin(request)
+        transaction = next(
+            (
+                t
+                for t in bank(person).transactions(person["profile"]["account"])
+                if t["txn_id"] == body.transaction_id
+            ),
+            None,
+        )
+        if transaction is None:
+            raise PermissionError("payment not owned")
+        image, generator = render_sample(o, person["profile"]["account"], transaction, body)
+        return Response(image, media_type="image/png", headers={"X-CaseProof-Generator": generator})
+
     @app.get("/v1/victim/me")
     def me(person=Depends(customer)):
         return {
@@ -225,6 +248,9 @@ def install(app, o):
         except ConflictError:
             if o.store.metadata(cid).get("submission_digest") != digest:
                 raise ConflictError("submission_content_changed") from None
+        from caseproof.domain.intake_priority import record_intake_priority
+
+        record_intake_priority(o, cid, [transactions[t] for t in body.transaction_ids])
         o.intake.add(cid, body.narrative.encode(), "text/plain", "narrative")
         snap = o.store.get(cid)
         o.jobs.enqueue(cid, snap.revision, priority=10)
@@ -263,6 +289,7 @@ def install(app, o):
             "evidence_count": len(snap.artifacts),
             "candidate_payments": [t.model_dump() for t in snap.unreported],
             "note": "A report acknowledgement does not mean money is held or recovered.",
+            **victim_receipt(o, cid, snap),
         }
 
     @app.post("/v1/victim/complaints/{cid}/artifacts")

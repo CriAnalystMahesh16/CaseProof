@@ -397,12 +397,34 @@ def create_app(settings, orchestrator=None, *, worker=False):
         packet = prepare(o, cid)
         return {"packet": packet.model_dump(mode="json"), "outbound": [], "queued": True}
 
+    @app.get("/v1/ui-config")
+    def frontend_config():
+        from caseproof.api.ui_views import ui_config
+
+        return ui_config()
+
     @app.get("/v1/cases/{cid}/delivered-packets/{pid}")
     def delivered(cid: str, pid: str, actor=Depends(identity)):
         from caseproof.cloud.outbound import delivered_packet
 
         authorised(cid, actor)
         return delivered_packet(o.store, cid, pid)
+
+    @app.get("/v1/cases/{cid}/delivered-packets/{pid}/document")
+    def handoff_document(cid: str, pid: str, actor=Depends(identity)):
+        from fastapi.responses import HTMLResponse
+
+        from caseproof.domain.handoff_document import render_document
+
+        packet = delivered(cid, pid, actor)
+        return HTMLResponse(
+            render_document(packet),
+            headers={
+                "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
+                "Content-Disposition": 'attachment; filename="caseproof-handoff.html"',
+            },
+        )
 
     @app.post("/v1/cases/{cid}/upload-links")
     def issue(cid: str, actor=Depends(identity)):

@@ -44,6 +44,17 @@ def test_customer_bridge_validates_before_redirect(tmp_path, monkeypatch):
     assert response.headers["cache-control"] == "no-store"
 
 
+def test_integrated_landing_is_the_homepage_when_present(tmp_path, monkeypatch):
+    (tmp_path / "landing").mkdir()
+    (tmp_path / "landing/index.html").write_text("<html>CaseProof landing</html>")
+    client = application(tmp_path, monkeypatch)
+    response = client.get("/", follow_redirects=False)
+    assert response.status_code == 200
+    assert "CaseProof landing" in response.text
+    assert response.headers["Cache-Control"] == "no-cache"
+    assert response.headers["X-Frame-Options"] == "DENY"
+
+
 def test_expired_customer_link_stays_denied(tmp_path, monkeypatch):
     client = application(tmp_path, monkeypatch, valid=False)
     assert client.get("/customer/expired").status_code == 403

@@ -66,6 +66,14 @@ def debit_times(snapshot):
         }
     )
     if not rows:
+        if not getattr(snapshot, "segments", []):
+            rows.update(
+                {
+                    row["txn_id"]: row
+                    for row in getattr(snapshot, "trail", {}).get("intake_debit_times", [])
+                }
+            )
+    if not rows:
         for claim in getattr(snapshot, "claims", []):
             if (
                 claim.kind == "txn_datetime"

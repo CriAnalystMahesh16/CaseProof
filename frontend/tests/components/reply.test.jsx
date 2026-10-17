@@ -2,7 +2,7 @@ import React from 'react';
 import {it,expect,vi,afterEach} from 'vitest';
 import {render,screen,fireEvent,waitFor,cleanup} from '@testing-library/react';
 const mock=vi.hoisted(()=>({data:null}));
-vi.mock('../../src/state/resources.jsx',async original=>({...await original(),useResource:()=>({data:mock.data,reload:vi.fn()})}));
+vi.mock('../../src/state/resources.jsx',async original=>({...await original(),useSession:()=>({setPersona:vi.fn()}),useResource:()=>({data:mock.data,reload:vi.fn()})}));
 vi.mock('../../src/api/client.js',async original=>({...await original(),post:vi.fn(async()=>({received:true}))}));
 import Victim from '../../src/pages/victim/Victim.jsx';
 afterEach(()=>{cleanup();location.hash='';});
