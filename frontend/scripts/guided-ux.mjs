@@ -259,18 +259,18 @@ try {
   await restore();
   await stage(4);
   await minimise();
+  // Local stacks have no Gemini and must explain it; cloud offers the AI option.
+  const aiOption = await p
+    .getByRole("checkbox", { name: "Use AI to write the fictional example" })
+    .count();
   check(
-    "Local provider explanation replaces disabled AI affordance",
-    (await p
-      .getByText("AI writing is unavailable for the configured provider", {
-        exact: false,
-      })
-      .isVisible()) &&
+    "AI example option matches the configured provider",
+    aiOption > 0 ||
       (await p
-        .getByRole("checkbox", {
-          name: "Use AI to write the fictional example",
+        .getByText("AI writing is unavailable for the configured provider", {
+          exact: false,
         })
-        .count()) === 0,
+        .isVisible()),
   );
   for (const kind of ["receipt", "chat", "call log"]) {
     await p

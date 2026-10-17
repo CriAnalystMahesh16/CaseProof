@@ -33,22 +33,22 @@ export default function BankBuilder({ stage, published = 0, total = 6, minutes }
   return (
     <div className="bank-builder" role="status" aria-live="polite">
       <div className="flow-visual" aria-hidden="true">
-        <span className="node victim">Victim</span>
-        <span className="lane">
+        <span className="bb-node victim">Victim</span>
+        <span className="bb-lane">
           <i />
           <i />
           <i />
         </span>
-        <span className="node mule">Mule A</span>
-        <span className="lane">
+        <span className="bb-node mule">Mule A</span>
+        <span className="bb-lane">
           <i />
           <i />
         </span>
-        <span className="node layer">Mule B</span>
-        <span className="lane">
+        <span className="bb-node layer">Mule B</span>
+        <span className="bb-lane">
           <i />
         </span>
-        <span className="node atm">ATM</span>
+        <span className="bb-node atm">ATM</span>
       </div>
       <ol className="build-steps">
         {BUILD_STEPS.map((text, i) => (
@@ -65,13 +65,15 @@ export default function BankBuilder({ stage, published = 0, total = 6, minutes }
             )}
             <span>
               {i === 1 && minutes ? `${text} (${minutes} minutes ago)` : text}
-              {i === 3 && stage >= 3 && ` · ${published} of ${total} banks`}
+              {i === 3 &&
+                stage >= 3 &&
+                (published ? ` · ${published} of ${total} banks` : " · 6 banks in parallel")}
             </span>
           </li>
         ))}
       </ol>
       {stage === 3 && (
-        <div className="build-bar">
+        <div className={"build-bar" + (published ? "" : " indeterminate")}>
           <span style={{ width: `${(100 * published) / (total || 6)}%` }} />
         </div>
       )}

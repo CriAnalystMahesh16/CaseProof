@@ -931,17 +931,17 @@
 .bank-builder { display: grid; gap: 12px; padding: 14px; border-radius: 10px;
   background: var(--surface-2, #fafaf7); border: 1px solid var(--line, #e6e3dc); }
 .flow-visual { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; overflow: hidden; }
-.flow-visual .node { flex: none; font-size: 12px; font-weight: 600; padding: 6px 9px; border-radius: 999px;
+.flow-visual .bb-node { flex: none; font-size: 12px; font-weight: 600; padding: 6px 9px; border-radius: 999px;
   background: #fff; border: 1px solid var(--line, #e6e3dc); }
-.flow-visual .node.victim { border-color: #c2410c; color: #c2410c; }
-.flow-visual .node.atm { background: #1f2937; color: #fff; border-color: #1f2937; }
-.flow-visual .lane { position: relative; flex: 1; min-width: 24px; height: 2px; background: var(--line, #e6e3dc); }
-.flow-visual .lane i { position: absolute; top: -4px; width: 10px; height: 10px; border-radius: 50%;
+.flow-visual .bb-node.victim { border-color: #c2410c; color: #c2410c; }
+.flow-visual .bb-node.atm { background: #1f2937; color: #fff; border-color: #1f2937; }
+.flow-visual .bb-lane { position: relative; flex: 1; min-width: 24px; height: 2px; background: var(--line, #e6e3dc); }
+.flow-visual .bb-lane i { position: absolute; top: -4px; width: 10px; height: 10px; border-radius: 50%;
   background: #c2410c; animation: cp-flow 2.4s linear infinite; }
-.flow-visual .lane i:nth-child(2) { animation-delay: 0.8s; }
-.flow-visual .lane i:nth-child(3) { animation-delay: 1.6s; }
+.flow-visual .bb-lane i:nth-child(2) { animation-delay: 0.8s; }
+.flow-visual .bb-lane i:nth-child(3) { animation-delay: 1.6s; }
 @keyframes cp-flow { from { left: 0; opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; } to { left: calc(100% - 10px); opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .flow-visual .lane i { animation: none; left: 45%; } }
+@media (prefers-reduced-motion: reduce) { .flow-visual .bb-lane i { animation: none; left: 45%; } }
 .build-steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 7px; }
 .build-steps li { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 .build-steps li.todo { opacity: 0.45; }
@@ -963,3 +963,5 @@
 .agent-steps ul { margin: 4px 0 0; padding-left: 18px; font-size: 12px; }
 .work-done .small { font-size: 12px; margin: 8px 0 0; }
 @media (max-width: 900px) { .overview-ai { grid-template-columns: 1fr; } }
+.build-bar.indeterminate span { width: 30% !important; animation: cp-slide 1.3s ease-in-out infinite; }
+@keyframes cp-slide { from { transform: translateX(-100%); } to { transform: translateX(340%); } }

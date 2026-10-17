@@ -236,10 +236,19 @@ function Start() {
               action
                 .run(async () => {
                   setBuild({ stage: 0 });
-                  const ticks = [1, 2].map((stage, i) =>
+                  // The server generates and publishes in one call (~20 s);
+                  // advance the visible steps while it works.
+                  const ticks = [
+                    [1, 1500],
+                    [2, 3500],
+                    [3, 6000],
+                  ].map(([stage, at]) =>
                     setTimeout(
-                      () => setBuild((b) => (b ? { ...b, stage } : b)),
-                      1400 * (i + 1),
+                      () =>
+                        setBuild((b) =>
+                          b ? { ...b, stage, published: 0, total: 6 } : b,
+                        ),
+                      at,
                     ),
                   );
                   try {

@@ -40,7 +40,7 @@ export function WorkDone({ view }) {
     [
       "Chase receiving banks to trace the money",
       positions.length
-        ? `${banks} accounts traced · ${formatMinor(sum("recoverable"))} still in accounts · ${formatMinor(
+        ? `${banks} account${banks === 1 ? "" : "s"} traced · ${formatMinor(sum("recoverable"))} still in accounts · ${formatMinor(
             sum("left_system"),
           )} left the banking system`
         : "Waiting for receiving-bank reports",
