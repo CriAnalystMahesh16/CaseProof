@@ -66,28 +66,11 @@ class BankNetwork:
             raise ValueError("scam timing must be 5-240 minutes ago")
         scale = minutes_ago / 30
         prefix = "SIM-" + hash_json([tenant, network_id, seed])[:10].upper()
-        # Encode the same independent 40-bit identity as readable words for the
-        # human-facing VPA. Hexadecimal payment names let random zero/O OCR
-        # ambiguity dominate the practice; internal IDs and references stay exact.
-        words = (
-            "acre",
-            "beam",
-            "fern",
-            "gate",
-            "haze",
-            "jade",
-            "keen",
-            "moss",
-            "nest",
-            "path",
-            "reed",
-            "teal",
-            "vale",
-            "wave",
-            "yarn",
-            "zeal",
-        )
-        payee_token = "-".join(words[int(char, 16)] for char in prefix[4:].lower())
+        # Preserve the independent 40-bit suffix with a compact, letter-only
+        # handle. Human-facing payment names should resemble ordinary VPAs;
+        # sandbox labelling is on the product and generated evidence.
+        alphabet = "acdefhkmnprstuvw"
+        payee_token = "".join(alphabet[int(char, 16)] for char in prefix[4:].lower())
         now = datetime.now(timezone(timedelta(hours=5, minutes=30))).replace(
             second=0, microsecond=0
         )
@@ -103,8 +86,17 @@ class BankNetwork:
             prefix + "-" + suffix for suffix in ("C1", "C2", "M1", "M2", "L2", "ATM", "SHOP")
         ]
         first_amount, extra_amount = (50000 + seed % 7 * 1000) * 100, (10000 + seed % 5 * 500) * 100
+        account_names = {
+            customer: "Maya Shah",
+            other: "Neel Patil",
+            mule: "Narmada Traders",
+            second: "Sahyadri Services",
+            layer: "Shakti Exports",
+            atm: "ATM - Thane West",
+            shop: "Shree Daily Mart",
+        }
         accounts = [
-            dict(id=id, bank=bank, label=id, kind=kind, opening_balance=opening)
+            dict(id=id, bank=bank, label=account_names[id], kind=kind, opening_balance=opening)
             for id, bank, kind, opening in (
                 (customer, "Cedar Demo Bank", "customer", 100000000),
                 (other, "Cedar Demo Bank", "customer", 50000000),
@@ -130,14 +122,14 @@ class BankNetwork:
             )
 
         transactions = [
-            transaction("HISTORY", customer, shop, 120000, "grocer@fictional.invalid", 4320),
-            transaction("GROCERY", customer, shop, 120000, "grocer@fictional.invalid", 25),
+            transaction("HISTORY", customer, shop, 120000, "shree.daily@cedardemo", 4320),
+            transaction("GROCERY", customer, shop, 120000, "shree.daily@cedardemo", 25),
             transaction(
                 "T1",
                 customer,
                 mule,
                 first_amount,
-                "safe-" + payee_token + "@fictional.invalid",
+                "narmada.traders." + payee_token + "@cedardemo",
                 30,
                 incident,
             ),
@@ -146,11 +138,11 @@ class BankNetwork:
                 customer,
                 second,
                 extra_amount,
-                "refund-" + payee_token + "@fictional.invalid",
+                "sahyadri.services." + payee_token + "@cedardemo",
                 20,
                 incident,
             ),
-            transaction("OTHER", other, shop, 80000, "grocer@fictional.invalid", 50),
+            transaction("OTHER", other, shop, 80000, "shree.daily@cedardemo", 50),
         ]
         dataset = dict(
             batch_id=prefix + "-B0",

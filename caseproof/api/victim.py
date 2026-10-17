@@ -165,7 +165,12 @@ def install(app, o):
     def people(request: Request):
         enabled()
         data = catalogue(request)
-        return {"customers": data["customers"], "banks": data["banks"], "synthetic": True}
+        return {
+            "customers": data["customers"],
+            "banks": data["banks"],
+            "synthetic": True,
+            "version": data.get("version", 1),
+        }
 
     @router.post("/v1/victim/sessions")
     def session(body: Session, response: Response, request: Request):

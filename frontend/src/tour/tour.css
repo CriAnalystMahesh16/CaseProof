@@ -166,3 +166,42 @@
   gap: 12px;
   margin: 4px 0 18px;
 }
+
+/* The measured card stays inside the viewport; its actions never scroll away. */
+.tour-card {
+  display: flex;
+  flex-direction: column;
+  padding: 14px 16px;
+  overflow: hidden;
+  max-height: calc(100dvh - 28px);
+}
+.tour-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.tour-top,
+.tour-progress,
+.tour-footer {
+  flex-shrink: 0;
+}
+.tour-footer {
+  flex-wrap: wrap;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.tour-jump > select {
+  margin: 0;
+  width: auto;
+  padding: 5px 6px;
+}
+.tour-card.docked {
+  max-height: 55dvh;
+}
+.tour-resume {
+  position: fixed;
+  right: 14px;
+  top: 80px;
+  z-index: 901;
+  box-shadow: var(--shadow-2);
+}

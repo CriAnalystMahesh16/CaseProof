@@ -11,9 +11,9 @@ def test_old_or_previous_catalogues_are_not_assigned_but_history_is_preserved(tm
     ready = worlds / "ready"
     ready.mkdir(parents=True)
     for sid, version, age in [
-        ("judge-000000000001", 3, 901),
+        ("judge-000000000001", 5, 901),
         ("judge-000000000002", 1, 0),
-        ("judge-000000000003", 3, 0),
+        ("judge-000000000003", 5, 0),
     ]:
         (worlds / (sid + ".json")).write_text(
             json.dumps(

@@ -21,11 +21,13 @@ import { useResource, useSession } from "../state/resources.jsx";
 import { apiRequest } from "../api/client.js";
 import { formatMinor, time, remaining, label } from "../models/caseView.js";
 import { go } from "../router.js";
+import CaseRegister from "./CaseRegister.jsx";
 export default function Queue({ mode, activeResource, scope, setScope }) {
   const { persona } = useSession(),
     [q, setQ] = useState(""),
     [filter, setFilter] = useState("all");
   const resource = activeResource;
+  if (mode === "cases") return <CaseRegister resource={resource} />;
   const all = resource.data?.cases || [],
     counts = resource.data?.counts;
   const rows = all.filter(

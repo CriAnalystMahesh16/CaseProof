@@ -87,7 +87,11 @@ class LiteralExtractor:
             payee_text = t
             if re.match(r"^(?:To|Payee):\s*", t, re.I):
                 payee_text = re.sub(r"\s+", "", re.sub(r"^(?:To|Payee):\s*", "", t, flags=re.I))
-            for m in re.finditer(r"[a-zA-Z0-9_.+-]+@fictional\.invalid", payee_text, re.I):
+            for m in re.finditer(
+                r"[a-zA-Z0-9_.+-]+@(?:fictional\.invalid|cedardemo)(?![A-Za-z0-9_.+-])",
+                payee_text,
+                re.I,
+            ):
                 add(s, "payee_vpa", m[0].lower())
             for m in re.finditer(r"\bSYNTH-(?:TX|REF)-[A-Z0-9]+(?:-[A-Z0-9]+)*\b", t):
                 if m[0].startswith(("SYNTH-TX-", "SYNTH-REF-")):

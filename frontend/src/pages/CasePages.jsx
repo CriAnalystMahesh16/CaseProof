@@ -264,7 +264,10 @@ function Overview({ view }) {
                 <Status value={w.job.status} />
               </div>
             )}
-            <p className="muted">Local OCR and literal rules are not Gemini.</p>
+            <p className="muted">
+              Processing providers for this assessment are listed above. Each
+              extracted fact remains linked to its source.
+            </p>
           </div>
         </Card>
         {(brief.conflicts?.length > 0 || brief.unknowns?.length > 0) && (
@@ -523,13 +526,23 @@ function Audit({ view }) {
         </Card>
         <Card className="card-b">
           <h3>Urgent referral history</h3>
-          {urgent.length ? urgent.map((r, i) => (
-            <div className="statement" key={r.referral_id || i}>
-              <b>Revision {r.revision} · {label(r.status || r.disposition || "recorded")}</b>
-              {r.reason && <p>{r.reason}</p>}
-              <details><summary>Referral record</summary><pre className="safe-json">{JSON.stringify(r, null, 2)}</pre></details>
-            </div>
-          )) : <Empty>No urgent referrals recorded.</Empty>}
+          {urgent.length ? (
+            urgent.map((r, i) => (
+              <div className="statement" key={r.referral_id || i}>
+                <b>
+                  Revision {r.revision} ·{" "}
+                  {label(r.status || r.disposition || "recorded")}
+                </b>
+                {r.reason && <p>{r.reason}</p>}
+                <details>
+                  <summary>Referral record</summary>
+                  <pre className="safe-json">{JSON.stringify(r, null, 2)}</pre>
+                </details>
+              </div>
+            ))
+          ) : (
+            <Empty>No urgent referrals recorded.</Empty>
+          )}
         </Card>
       </div>
     </div>

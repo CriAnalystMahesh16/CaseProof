@@ -119,3 +119,24 @@ it("remembers the case filed during the tour", () => {
   expect(caseFromRoute("/staff/cases/CASE-x/trail")).toBe("CASE-x");
   expect(caseFromRoute("/staff/queue")).toBeNull();
 });
+
+it("stays on the current entry point and cannot skip uncompleted intake actions", () => {
+  location.hash = "#/victim/start";
+  render(<TourOverlay />);
+  act(() => tour.start(0));
+  expect(location.hash).toBe("#/victim/start");
+  fireEvent.click(screen.getByRole("button", { name: /Next/ }));
+  expect(screen.getByRole("button", { name: /Next/ }).disabled).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "Minimise guidance" }));
+  expect(screen.queryByRole("dialog")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: /Show guidance/ }));
+  expect(screen.getByRole("dialog")).toBeTruthy();
+});
+
+it('allows Back/resume into an intake step whose action is already satisfied',()=>{
+ const evidence=document.createElement('h2');evidence.dataset.tour='report-evidence';document.body.append(evidence);
+ render(<TourOverlay/>);
+ act(()=>tour.start(2));
+ expect(screen.getByRole('button',{name:/Next/}).disabled).toBe(false);
+ evidence.remove();
+});

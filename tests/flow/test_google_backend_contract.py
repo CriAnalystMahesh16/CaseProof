@@ -290,6 +290,12 @@ def test_new_cloud_complaint_request_reply_approval_and_two_deliveries(tmp_path,
         tasks.drain(o, receiver)
         snapshot = o.store.get(cid)
         assert snapshot.ledger_matches and snapshot.unreported
+        assert (
+            client.get("/v1/workspace?scope=active").json()["cases"][0][
+                "selected_bank_amount_minor"
+            ]
+            == t1["amount_minor"]
+        )
         assert any(r.provider == "documentai" for r in snapshot.run_meta)
         assert all(r.mode == "live" for r in snapshot.run_meta)  # Service doubles, not live Google!
         rid = next(r.request_id for r in snapshot.requests if r.state == "proposed")

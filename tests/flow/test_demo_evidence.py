@@ -90,6 +90,10 @@ def test_priority_is_available_before_ocr_without_granting_readiness(tmp_path):
         flow = client.get(f"/v1/cases/{cid}/workflow").json()
         assert 0 < flow["clock"]["golden_hour_remaining"] <= 60
         assert flow["confirmed_disputed_minor"] == 0
+        row = client.get("/v1/workspace?scope=active").json()["cases"][0]
+        assert row["selected_bank_amount_minor"] == sum(
+            t["amount_minor"] for t in transactions if t["txn_id"] in selected
+        )
         assert not flow["urgent_referral"]["eligible"]
         assert flow["readiness"] == "REVIEW_REQUIRED"
         receipt = client.get(f"/v1/victim/complaints/{cid}").json()

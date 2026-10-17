@@ -33,6 +33,9 @@ class CloudBankNetwork(BankNetwork):
         generated = json.loads(raw)
         for position, customer in enumerate(generated["dataset"]["customers"]):
             customer["display_name"] = NAMES[index * 2 + position] + " (synthetic)"
+            for account in generated["dataset"]["accounts"]:
+                if account["id"] == customer["account"]:
+                    account["label"] = customer["display_name"].removesuffix(" (synthetic)")
         # The catalogue reads the manifest; it must carry the same distinct names.
         generated["manifest"]["customers"] = generated["dataset"]["customers"]
 
@@ -62,6 +65,7 @@ class CloudBankNetwork(BankNetwork):
             for index, seed in enumerate(seeds)
         ]
         return {
+            "version": 5,
             "banks": BANKS,
             "customers": [
                 {

@@ -113,6 +113,9 @@ def describe(store, snapshot, records):
         "historical_deliveries": historical,
         "overlapping_complaints": overlaps,
         "victim_summary": narrative[:1000],
+        "selected_bank_amount_minor": sum(bank_amounts[t] for t in selected_ids)
+        if selected_ids and selected_ids.issubset(bank_amounts)
+        else snapshot.trail.get("intake_selected_amount_minor"),
         "confirmed_disputed_minor": confirmed,
         "additional_candidate_minor": candidates,
         "urgent_referral": referral_readiness(snapshot),

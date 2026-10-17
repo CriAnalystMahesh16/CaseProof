@@ -36,7 +36,7 @@ const ALL_STEPS = [
   {
     id: "intro",
     chapter: "intro",
-    go: "/entry",
+    go: null,
     title: "Welcome: the golden hour",
     body: [
       'It is 10:02. A caller posing as Cedar Bank\'s fraud team persuades a customer to move money to a "safe account". Minutes later the customer realises it was a scam.',
@@ -514,7 +514,15 @@ const HIGHLIGHTS = [
 export const STEPS = HIGHLIGHTS.map((id) => {
   const step = ALL_STEPS.find((item) => item.id === id);
   if (id === "brief")
-    return { ...step, go: caseTab("overview"), needsCase: true };
+    return {
+      ...step,
+      go: caseTab("overview"),
+      needsCase: true,
+      body: [
+        ...step.body,
+        "Work as Analyst demo to inspect evidence and request clarification. Switch to Reviewer demo only for the independent approval of the current revision. The bank applies this separation so the investigator cannot authorise their own handoff.",
+      ],
+    };
   if (id === "registered")
     return {
       ...step,
@@ -552,7 +560,7 @@ export const STEPS = HIGHLIGHTS.map((id) => {
     return {
       ...step,
       body: [
-        "Start a fresh practice session, select any customer, then Report a payment scam. Choose the recent safe-account payment. Each profile has its own bank-backed example; unrelated payments stay separate.",
+        "Select any customer and report the relevant recent payment. This highlight follows you through account selection and payment selection; it advances only when the narrative form is open.",
       ],
       action:
         "Start fresh, choose a customer and select the scam payment; continue to the narrative.",
@@ -581,6 +589,7 @@ export const STEPS = HIGHLIGHTS.map((id) => {
       ...step,
       go: caseTab("audit"),
       needsCase: true,
+      title: "Verify the handoff",
       body: [
         "The output is a cited investigation brief and a revision-bound, approved handoff packet with sourced trail positions, two delivery receipts and a follow-up owner. Delivery does not establish a freeze or refund.",
         "Inspect audit and approval history here. You can revisit any chapter, or start another fresh complaint with a different customer.",

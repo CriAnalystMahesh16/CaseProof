@@ -2,9 +2,10 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Compass, X } from "lucide-react";
 import { go, useRoute } from "../router.js";
 import { apiRequest } from "../api/client.js";
-import { useSession } from "../state/resources.jsx";
+import { useSession, useResource } from "../state/resources.jsx";
 import { CHAPTERS, EXAMPLE_NARRATIVE, STEPS } from "./steps.js";
 import { caseFromRoute, tour, useTour } from "./store.js";
+import { tourOutcome } from "../models/tourOutcome.js";
 import "./tour.css";
 
 const CARD_WIDTH = 360;
@@ -19,21 +20,26 @@ function spotlightFor(selector) {
     : anchor;
 }
 
-function place(rect) {
+function place(rect, measuredHeight) {
   const vw = window.innerWidth,
     vh = window.innerHeight;
   if (vw < 760) return { docked: true };
   if (!rect) return { centred: true };
   const width = Math.min(CARD_WIDTH, vw - 2 * GAP);
   const clampX = (x) => Math.min(Math.max(GAP, x), vw - width - GAP);
-  const clampY = (y) => Math.min(Math.max(GAP, y), vh - 300);
+  const height = Math.min(measuredHeight, vh - 2 * GAP);
+  const clampY = (y) => Math.min(Math.max(GAP, y), vh - height - GAP);
   if (rect.right + GAP + width < vw - GAP)
     return { left: rect.right + GAP, top: clampY(rect.top), width };
   if (rect.left - GAP - width > GAP)
     return { left: rect.left - GAP - width, top: clampY(rect.top), width };
-  if (vh - rect.bottom > 280)
+  if (vh - rect.bottom > height + 2 * GAP)
     return { left: clampX(rect.left), top: rect.bottom + GAP, width };
-  return { left: clampX(rect.left), top: clampY(rect.top - 300), width };
+  return {
+    left: clampX(rect.left),
+    top: clampY(rect.top - height - GAP),
+    width,
+  };
 }
 
 function insertExample() {
@@ -52,10 +58,7 @@ function insertExample() {
 
 export function TourButton({ className = "btn sm", label = "Tour" }) {
   return (
-    <button
-      className={className}
-      onClick={() => tour.start(tour.get().active ? tour.get().index : 0)}
-    >
+    <button className={className} onClick={() => tour.start(tour.get().index)}>
       <Compass size={13} /> {label}
     </button>
   );
@@ -64,6 +67,48 @@ export function TourButton({ className = "btn sm", label = "Tour" }) {
 export default function TourOverlay() {
   const state = useTour();
   return state.active ? <ActiveTour state={state} /> : <CaseTracker />;
+}
+
+function HandoffChecklist({ caseId, onComplete }) {
+  const { persona } = useSession();
+  const resource = useResource(
+    "tour-outcome:" + caseId + ":" + persona,
+    (signal) =>
+      caseId
+        ? apiRequest(`/v1/cases/${caseId}/workflow`, { persona, signal })
+        : Promise.resolve(null),
+    5000,
+  );
+  const w = resource.data;
+  const { delivered, owned } = tourOutcome(w);
+  useEffect(
+    () => onComplete(delivered && owned),
+    [delivered, owned, onComplete],
+  );
+  return (
+    <div className="tour-action">
+      <b>Actual case outcome</b>
+      <p>
+        {delivered
+          ? "✓ Both receiver acknowledgements recorded"
+          : "Pending: reviewer approval and both receiver acknowledgements"}
+      </p>
+      <p>
+        {owned
+          ? "✓ Follow-up owner and next action saved"
+          : "Pending: owner, next action and awaiting-external follow-up"}
+      </p>
+      {resource.error && (
+        <p>Could not refresh the outcome. Retry from the case workspace.</p>
+      )}
+      <button
+        className="btn sm"
+        onClick={() => go(`/staff/cases/${caseId}/delivery`)}
+      >
+        Open delivery &amp; follow-up
+      </button>
+    </div>
+  );
 }
 
 // Remember the visitor's case even before the tour starts (e.g. resumed later).
@@ -79,12 +124,35 @@ function CaseTracker() {
 function ActiveTour({ state }) {
   const route = useRoute();
   const { persona } = useSession();
-  const step = STEPS[state.index];
+  const baseStep = STEPS[state.index];
+  const step =
+    baseStep.id === "practice"
+      ? {
+          ...baseStep,
+          target:
+            route === "/victim/start"
+              ? '[data-tour="choose-your-demo-customer"]'
+              : route === "/victim/home"
+                ? '[data-tour="report-scam"]'
+                : '[data-tour="report-payments"]',
+          action:
+            route === "/victim/start"
+              ? "Start fresh if needed, select Samer or another customer, then Continue with selected customer."
+              : route === "/victim/home"
+                ? "Choose Report a payment scam."
+                : "Select the recent large payment you want to report, then Continue. Payments are newest first.",
+        }
+      : baseStep;
   const [rect, setRect] = useState(null);
   const [missing, setMissing] = useState(false);
   const [notice, setNotice] = useState("");
   const scrolled = useRef(false);
   const titleRef = useRef(null);
+  const cardRef = useRef(null);
+  const [height, setHeight] = useState(480);
+  const [minimised, setMinimised] = useState(false);
+  const [waiting, setWaiting] = useState(!!step.advance);
+  const [outcomeComplete, setOutcomeComplete] = useState(false);
   const last = state.index === STEPS.length - 1;
 
   useEffect(() => {
@@ -101,6 +169,11 @@ function ActiveTour({ state }) {
     setNotice("");
     titleRef.current?.focus({ preventScroll: true });
     if (!step.go) return;
+    if (
+      step.id === "practice" &&
+      /^#\/victim\/(?:start|home|report)$/.test(location.hash)
+    )
+      return;
     (async () => {
       let ctx = tour.get();
       if (step.needsCase && !ctx.caseId) {
@@ -140,13 +213,22 @@ function ActiveTour({ state }) {
         (advance.selector && !!document.querySelector(advance.selector)));
     // Only an action taken during this step advances it (Back must not bounce).
     const already = happened();
+    setWaiting(!!step.advance && !already);
     const tick = () => {
       if (!already && happened()) {
         tour.next();
         return;
       }
       if (!step.target) return;
-      const element = spotlightFor(step.target);
+      const target =
+        step.id === "practice"
+          ? location.hash.includes("/victim/start")
+            ? '[data-tour="choose-your-demo-customer"]'
+            : location.hash.includes("/victim/home")
+              ? '[data-tour="report-scam"]'
+              : '[data-tour="report-payments"]'
+          : step.target;
+      const element = spotlightFor(target);
       if (!element) {
         setRect(null);
         setMissing(Date.now() - started > 2500);
@@ -160,7 +242,11 @@ function ActiveTour({ state }) {
         ).matches;
         element.scrollIntoView({
           // Phones dock the card at the bottom, so keep the target above it.
-          block: window.innerWidth < 760 ? "start" : "center",
+          block:
+            window.innerWidth < 760 ||
+            element.getBoundingClientRect().height > window.innerHeight * 0.6
+              ? "start"
+              : "center",
           behavior: still ? "auto" : "smooth",
         });
       }
@@ -193,6 +279,17 @@ function ActiveTour({ state }) {
     };
   }, [state.index]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useLayoutEffect(() => {
+    if (!cardRef.current) return;
+    const measure = () =>
+      setHeight(cardRef.current?.getBoundingClientRect().height || 480);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(cardRef.current);
+    return () => observer.disconnect();
+  }, [minimised, state.index]);
+
   useEffect(() => {
     const key = (event) => {
       if (event.key === "Escape") tour.stop();
@@ -201,11 +298,20 @@ function ActiveTour({ state }) {
     return () => window.removeEventListener("keydown", key);
   }, []);
 
-  const position = place(rect);
+  const position = place(rect, height);
   const chapterIds = [...new Set(STEPS.map((item) => item.chapter))];
   const chapterStart = (chapter) =>
     STEPS.findIndex((candidate) => candidate.chapter === chapter);
 
+  if (minimised)
+    return (
+      <button
+        className="btn primary tour-resume"
+        onClick={() => setMinimised(false)}
+      >
+        Show guidance · {state.index + 1} / {STEPS.length}
+      </button>
+    );
   return (
     <>
       {rect && (
@@ -222,6 +328,7 @@ function ActiveTour({ state }) {
       )}
       {!rect && <div className="tour-dim" aria-hidden="true" />}
       <section
+        ref={cardRef}
         className={
           "tour-card" +
           (position.docked ? " docked" : "") +
@@ -243,6 +350,13 @@ function ActiveTour({ state }) {
           </span>
           <button
             className="icon-btn tour-close"
+            aria-label="Minimise guidance"
+            onClick={() => setMinimised(true)}
+          >
+            −
+          </button>
+          <button
+            className="icon-btn tour-close"
             aria-label="Close tour"
             onClick={() => tour.stop()}
           >
@@ -254,47 +368,61 @@ function ActiveTour({ state }) {
             style={{ width: `${((state.index + 1) / STEPS.length) * 100}%` }}
           />
         </div>
-        <h2 id="tour-title" tabIndex={-1} ref={titleRef} aria-live="polite">
-          {step.title}
-        </h2>
-        {step.body.map((paragraph, i) => (
-          <p key={i}>{paragraph}</p>
-        ))}
-        {missing && step.optional && (
-          <p className="tour-note">
-            Not shown for this case yet. {step.absent}
-          </p>
-        )}
-        {missing && !step.optional && (
-          <p className="tour-note">
-            This panel is not on the current screen yet. Finish the previous
-            step (Back shows it), or wait a moment if the case is still
-            processing.
-          </p>
-        )}
-        {notice && <p className="tour-note">{notice}</p>}
-        {step.example && (
-          <div className="tour-example">
-            <q>{EXAMPLE_NARRATIVE}</q>
-            <button
-              className="btn sm"
-              onClick={() =>
-                setNotice(
-                  insertExample()
-                    ? "Example inserted. You can edit it before continuing."
-                    : "Open the narrative step first, then insert the example.",
-                )
-              }
-            >
-              Insert example
-            </button>
-          </div>
-        )}
-        {step.action && (
-          <p className="tour-action">
-            <b>Your turn:</b> {step.action}
-          </p>
-        )}
+        <div className="tour-body">
+          <h2 id="tour-title" tabIndex={-1} ref={titleRef} aria-live="polite">
+            {step.title}
+          </h2>
+          {step.body.map((paragraph, i) => (
+            <p key={i}>{paragraph}</p>
+          ))}
+          {missing && step.optional && (
+            <p className="tour-note">
+              Not shown for this case yet. {step.absent}
+            </p>
+          )}
+          {missing && !step.optional && (
+            <p className="tour-note">
+              This panel is not on the current screen yet. Finish the previous
+              step (Back shows it), or wait a moment if the case is still
+              processing.
+            </p>
+          )}
+          {notice && <p className="tour-note">{notice}</p>}
+          {step.example && (
+            <div className="tour-example">
+              <q>{EXAMPLE_NARRATIVE}</q>
+              <button
+                className="btn sm"
+                onClick={() =>
+                  setNotice(
+                    insertExample()
+                      ? "Example inserted. You can edit it before continuing."
+                      : "Open the narrative step first, then insert the example.",
+                  )
+                }
+              >
+                Insert example
+              </button>
+            </div>
+          )}
+          {step.action && (
+            <p className="tour-action">
+              <b>Your turn:</b> {step.action}
+            </p>
+          )}
+          {waiting && (
+            <p className="muted">
+              Complete this action in the page to continue automatically.
+              Minimise guidance if it covers a control.
+            </p>
+          )}
+          {last && (
+            <HandoffChecklist
+              caseId={state.caseId}
+              onComplete={setOutcomeComplete}
+            />
+          )}
+        </div>
         <div className="tour-footer">
           <label className="tour-jump">
             <span className="sr-only">Jump to chapter</span>
@@ -318,11 +446,19 @@ function ActiveTour({ state }) {
             <ArrowLeft size={13} /> Back
           </button>
           {last ? (
-            <button className="btn sm primary" onClick={() => tour.reset()}>
+            <button
+              className="btn sm primary"
+              disabled={!outcomeComplete}
+              onClick={() => tour.reset()}
+            >
               Finish
             </button>
           ) : (
-            <button className="btn sm primary" onClick={() => tour.next()}>
+            <button
+              className="btn sm primary"
+              disabled={waiting}
+              onClick={() => tour.next()}
+            >
               Next <ArrowRight size={13} />
             </button>
           )}

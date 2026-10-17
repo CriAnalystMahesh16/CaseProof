@@ -23,3 +23,14 @@ export function initialPriorityAlerts(rows) {
     )
     .map((row) => ({ ...row, type: "priority" }));
 }
+
+export function refreshAlertRows(alerts, rows) {
+  const latest = new Map(rows.map((row) => [row.case_id, row]));
+  return alerts.map((alert) => ({
+    ...alert,
+    ...latest.get(alert.case_id),
+    eventId: alert.eventId,
+    type: alert.type,
+    seen: alert.seen,
+  }));
+}

@@ -16,7 +16,7 @@ def test_cropped_sample_ist_time_and_payee_survive_real_pixel_read_without_guess
         "txn_id": "SIM-8FF0B71441-T1",
         "amount_minor": 5100000,
         "ts": "2026-10-17T14:00:00+00:00",
-        "payee": "safe-nest-zeal-zeal-acre-teal-moss-beam-haze-haze-beam@fictional.invalid",
+        "payee": "narmada.traders.nwwatmcffm@cedardemo",
         "reference": reference,
     }
     image, generator = render_sample(

@@ -19,6 +19,6 @@ it("greets the scoped customer using the API display name", () => {
   mock.data = { customer, complaints: [], transactions: [] };
   render(<Victim route="/victim/home" />);
   expect(
-    screen.getByRole("heading", { name: "Hello, Asha Rao (synthetic)." }),
+    screen.getByRole("heading", { name: "Hello, Asha Rao." }),
   ).toBeTruthy();
 });

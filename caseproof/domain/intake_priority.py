@@ -21,4 +21,5 @@ def record_intake_priority(o, cid, selected):
     snapshot.revision += 1
     snapshot.clock = clock_state(rows[0]["ts"], debits=rows)
     snapshot.trail["intake_debit_times"] = rows
+    snapshot.trail["intake_selected_amount_minor"] = sum(row["amount_minor"] for row in selected)
     o.store.publish(snapshot, prior, "bank_selection_priority_recorded")

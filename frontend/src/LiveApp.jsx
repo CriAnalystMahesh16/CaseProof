@@ -36,9 +36,14 @@ import {
 } from "./components/live.jsx";
 import { formatMinor, time, remaining, label } from "./models/caseView.js";
 import Queue from "./pages/LiveQueue.jsx";
+import GoldenHourAlert from "./components/GoldenHourAlert.jsx";
 import CasePages from "./pages/CasePages.jsx";
 import { auth } from "./api/auth.js";
-import { queueChanges, initialPriorityAlerts } from "./models/queue.js";
+import {
+  queueChanges,
+  initialPriorityAlerts,
+  refreshAlertRows,
+} from "./models/queue.js";
 import StaffSignIn from "./components/StaffSignIn.jsx";
 import Victim from "./pages/victim/Victim.jsx";
 import { TourButton } from "./tour/Tour.jsx";
@@ -137,10 +142,11 @@ function Staff({ route }) {
   const { persona, setPersona, config } = useSession();
   const [menu, setMenu] = useState(false);
   const [queueScope, setQueueScope] = useState("active");
+  const resourceScope = route === "/staff/cases" ? "all" : queueScope;
   const queue = useResource(
-    "staff-queue:" + persona + ":" + queueScope,
+    "staff-queue:" + persona + ":" + resourceScope,
     (signal) =>
-      apiRequest("/v1/workspace?scope=" + queueScope, { persona, signal }),
+      apiRequest("/v1/workspace?scope=" + resourceScope, { persona, signal }),
     5000,
   );
   const previous = useRef(null);
@@ -153,22 +159,21 @@ function Staff({ route }) {
         ? initialPriorityAlerts(queue.data.cases || [])
         : queueChanges(previous.current, queue.data.cases || []);
     previous.current = queue.data.cases || [];
-    if (changes.length)
-      setAlerts((old) =>
-        [
-          ...changes.map((c) => ({
-            ...c,
-            eventId: c.case_id + ":" + c.status + ":" + Date.now(),
-            seen: false,
-          })),
-          ...old,
-        ].slice(0, 30),
-      );
+    setAlerts((old) =>
+      [
+        ...changes.map((c) => ({
+          ...c,
+          eventId: c.case_id + ":" + c.status + ":" + Date.now(),
+          seen: false,
+        })),
+        ...refreshAlertRows(old, queue.data.cases || []),
+      ].slice(0, 30),
+    );
   }, [queue.data]);
   useEffect(() => {
     previous.current = null;
     setAlerts([]);
-  }, [persona, queueScope]);
+  }, [persona, resourceScope]);
   const parts = route.split("/"),
     caseId = parts[2] === "cases" ? parts[3] : null,
     tab = (parts[4] || "overview").split("?")[0];
@@ -335,6 +340,47 @@ function Staff({ route }) {
             {!auth.personas ? "ST" : persona === "reviewer" ? "RV" : "AN"}
           </span>
         </header>
+        <details className="role-help">
+          <summary>
+            Analyst investigates · Reviewer approves — role guide
+          </summary>
+          <p>
+            <b>Analyst:</b> investigates the complaint, checks sources and the
+            trail, asks for missing information and prepares the proposed
+            handoff. <b>Reviewer:</b> independently checks the current revision
+            and approves or rejects it with a reason. An analyst cannot approve
+            their own handoff. In this practice, use Demo identity to try each
+            role; in a bank they are separately authorised staff.
+          </p>
+        </details>
+        {(() => {
+          const item = alerts.find(
+            (a) =>
+              !a.seen &&
+              ["arrived", "priority"].includes(a.type) &&
+              a.clock?.golden_hour_remaining > 0,
+          );
+          return item ? (
+            <GoldenHourAlert
+              item={item}
+              onLater={() =>
+                setAlerts((old) =>
+                  old.map((a) =>
+                    a.eventId === item.eventId ? { ...a, seen: true } : a,
+                  ),
+                )
+              }
+              onOpen={() => {
+                go(`/staff/cases/${item.case_id}/overview`);
+                setAlerts((old) =>
+                  old.map((a) =>
+                    a.eventId === item.eventId ? { ...a, seen: true } : a,
+                  ),
+                );
+              }}
+            />
+          ) : null;
+        })()}
         <main className="content" id="content">
           {alerts.some(
             (a) => !a.seen && ["arrived", "priority"].includes(a.type),

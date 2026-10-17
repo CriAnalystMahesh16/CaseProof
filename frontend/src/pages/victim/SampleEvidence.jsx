@@ -45,19 +45,22 @@ export default function SampleEvidence({
         The practice receipt is a crop without its reference. The analyst must
         match its visible payee and time against bank records.
       </p>
-      <label className="checkbox-label">
-        <input
-          type="checkbox"
-          checked={ai}
-          disabled={!resource.data?.ai_available || action.busy}
-          onChange={(e) => setAi(e.target.checked)}
-        />{" "}
-        Use AI to write the fictional example
-      </label>
+      {resource.data?.ai_available && (
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={ai}
+            disabled={!resource.data?.ai_available || action.busy}
+            onChange={(e) => setAi(e.target.checked)}
+          />{" "}
+          Use AI to write the fictional example
+        </label>
+      )}
       {!resource.data?.ai_available && (
         <p className="muted">
-          AI sample generation is unavailable in this provider mode. Simulator
-          samples are available; they are not AI-generated.
+          Local practice: create sample documents below or upload your own
+          evidence. AI writing is unavailable on this local stack; it requires a
+          configured live provider.
         </p>
       )}
       {!selected.length && (

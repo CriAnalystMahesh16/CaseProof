@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from "react";
 import { STEPS } from "./steps.js";
 
-const KEY = "cp-demo-tour-v2";
+const KEY = "cp-demo-tour-v3";
 const listeners = new Set();
 let state = load();
 

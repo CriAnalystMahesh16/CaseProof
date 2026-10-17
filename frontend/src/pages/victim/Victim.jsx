@@ -36,6 +36,7 @@ import {
 } from "../../features/victim/submission.js";
 import { auth } from "../../api/auth.js";
 import SampleEvidence from "./SampleEvidence.jsx";
+import { recentPayments, contactWarning } from "../../models/reportGuidance.js";
 import { TourButton } from "../../tour/Tour.jsx";
 
 export default function Victim({ route }) {
@@ -140,7 +141,7 @@ function CustomerOption({ person, selected, busy, onSelect }) {
     >
       <span className="avatar">{person.display_name?.slice(0, 2) || "CP"}</span>
       <div>
-        <b>{person.display_name}</b>
+        <b>{person.display_name.replace(/ \(synthetic\)$/i, "")}</b>
         <small className="mono muted">{person.account}</small>
         {incident && (
           <small className="incident-hint">
@@ -186,6 +187,13 @@ function Start() {
           choose.
         </p>
       </div>
+      {(catalogue || resource.data)?.version < 5 && (
+        <p className="banner info">
+          This is an earlier practice catalogue. Start a fresh practice session
+          below for the updated payment names and a current response window.
+          Earlier reports remain in the Case register.
+        </p>
+      )}
       <Card>
         <CardH
           title="Start a live practice scam"
@@ -342,7 +350,9 @@ function Home() {
     <>
       <div className="victim-title">
         <div className="eyebrow">Your Cedar account</div>
-        <h1>Hello, {me.customer.display_name}.</h1>
+        <h1>
+          Hello, {me.customer.display_name.replace(/ \(synthetic\)$/i, "")}.
+        </h1>
         <p>
           Tell us which payments concern you. You can return here for updates
           and focused questions.
@@ -451,6 +461,7 @@ function Report() {
     [narrative, setNarrative] = useState(""),
     [authorisation, setAuthorisation] = useState("unsure"),
     [first, setFirst] = useState(""),
+    [contactConfirmed, setContactConfirmed] = useState(false),
     [refs, setRefs] = useState({
       bank_reference: "",
       ncrp_reference: "",
@@ -466,6 +477,11 @@ function Report() {
   if (me.loading) return <Loading />;
   if (!me.data) return <SessionError resource={me} />;
   const existing = journal;
+  const chronologyWarning = contactWarning(
+    first,
+    selected,
+    me.data.transactions,
+  );
   function advance() {
     const error =
       step === 0 && !unknown && !selected.length
@@ -473,13 +489,15 @@ function Report() {
         : step === 1 &&
             (narrative.trim().length < 5 || narrative.length > 10000)
           ? "Describe what happened in 5–10,000 characters."
-          : step === 2
-            ? validateFiles(
-                files.map((f) => f.file),
-                narrative,
-                config.evidence,
-              )
-            : null;
+          : step === 1 && chronologyWarning && !contactConfirmed
+            ? "Check the first contact time, or confirm it is accurate below."
+            : step === 2
+              ? validateFiles(
+                  files.map((f) => f.file),
+                  narrative,
+                  config.evidence,
+                )
+              : null;
     setValidation(error || "");
     if (!error) setStep((n) => Math.min(3, n + 1));
   }
@@ -518,7 +536,8 @@ function Report() {
       </button>
       <div className="victim-title">
         <div className="eyebrow">
-          New report · {me.data.customer.display_name}
+          New report ·{" "}
+          {me.data.customer.display_name.replace(/ \(synthetic\)$/i, "")}
         </div>
         <h1>Tell us what happened.</h1>
         <p>
@@ -575,10 +594,10 @@ function Report() {
                 Which payments do you want to dispute?
               </h2>
               <p className="muted">
-                Choose only payments that belong in this report. A candidate is
-                not automatically disputed.
+                Newest payments first. Choose only payments that belong in this
+                report. A candidate is not automatically disputed.
               </p>
-              {me.data.transactions.map((t) => (
+              {recentPayments(me.data.transactions).map((t) => (
                 <label className="select-payment" key={t.txn_id}>
                   <input
                     type="checkbox"
@@ -638,13 +657,36 @@ function Report() {
                 </select>
               </label>
               <label>
-                First contact time (optional, local time)
+                When did the caller first contact you? (optional, local time)
                 <input
                   type="datetime-local"
                   value={first}
-                  onChange={(e) => setFirst(e.target.value)}
+                  onChange={(e) => {
+                    setFirst(e.target.value);
+                    setContactConfirmed(false);
+                  }}
                 />
               </label>
+              <p className="muted">
+                Enter when the contact began, not when you are filing this
+                report. Leave it blank if uncertain. The response window uses
+                the bank payment time.
+              </p>
+              {chronologyWarning && (
+                <div className="banner warn" role="status">
+                  <div>
+                    <p>{chronologyWarning}</p>
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={contactConfirmed}
+                        onChange={(e) => setContactConfirmed(e.target.checked)}
+                      />
+                      Keep this contact time as reported
+                    </label>
+                  </div>
+                </div>
+              )}
               <details>
                 <summary>Existing complaint references (optional)</summary>
                 {Object.entries(refs).map(([k, v]) => (
@@ -718,8 +760,13 @@ function Report() {
               <h2 data-tour="report-review">Review your report</h2>
               <div className="bound">
                 <p>
-                  <b>{me.data.customer.display_name}</b> ·{" "}
-                  {me.data.customer.account}
+                  <b>
+                    {me.data.customer.display_name.replace(
+                      / \(synthetic\)$/i,
+                      "",
+                    )}
+                  </b>{" "}
+                  · {me.data.customer.account}
                 </p>
                 <p>
                   {unknown
