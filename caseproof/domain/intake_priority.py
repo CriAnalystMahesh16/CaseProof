@@ -7,6 +7,8 @@ from caseproof.domain.ledger import dt
 def record_intake_priority(o, cid, selected):
     if not selected:
         return
+    # One owned bank debit contributes once even if a client repeats its ID.
+    selected = list({row["txn_id"]: row for row in selected}.values())
     snapshot = o.store.get(cid)
     if snapshot.clock or snapshot.segments:
         return

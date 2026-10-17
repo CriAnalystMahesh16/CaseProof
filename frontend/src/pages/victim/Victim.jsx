@@ -223,6 +223,7 @@ function Start() {
           <button
             className="btn primary"
             data-tour="practice-session"
+            aria-busy={action.busy}
             disabled={action.busy}
             onClick={() =>
               action

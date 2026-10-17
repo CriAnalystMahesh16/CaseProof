@@ -560,10 +560,10 @@ export const STEPS = HIGHLIGHTS.map((id) => {
     return {
       ...step,
       body: [
-        "Select any customer and report the relevant recent payment. This highlight follows you through account selection and payment selection; it advances only when the narrative form is open.",
+        "Choose a timing, start a fresh practice session, then select a customer marked with a suspicious payment. This highlight follows you through account selection and payment selection; it advances only when the narrative form is open.",
       ],
       action:
-        "Start fresh, choose a customer and select the scam payment; continue to the narrative.",
+        "Start fresh with a current timing, choose a marked scam victim and select their suspicious payment; continue to the narrative.",
       advance: { selector: at("report-narrative") },
     };
   if (id === "intro")

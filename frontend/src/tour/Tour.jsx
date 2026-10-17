@@ -158,7 +158,7 @@ function ActiveTour({ state }) {
                 : '[data-tour="report-payments"]',
           action:
             route === "/victim/start"
-              ? "Start fresh if needed, select Samer or another customer, then Continue with selected customer."
+              ? "Choose a scam timing and start fresh if needed, then select a customer marked with a suspicious payment and Continue with selected customer."
               : route === "/victim/home"
                 ? "Choose Report a payment scam."
                 : "Select the recent large payment you want to report, then Continue. Payments are newest first.",

@@ -1,12 +1,12 @@
 import React from "react";
 import { it, expect, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
 import PacketDocument from "../../src/pages/case/PacketDocument.jsx";
 import packet from "./packet.fixture.json";
 afterEach(cleanup);
 
-it("renders the delivered packet as a readable two-part report", () => {
-  render(<PacketDocument packet={packet} />);
+it("renders the delivered packet as a readable two-part report", async () => {
+  await act(async () => { render(<PacketDocument packet={packet} />); });
   expect(screen.getByText("Payment scam investigation report")).toBeTruthy();
   expect(screen.getByText(/1 · Bank case ticket/)).toBeTruthy();
   expect(screen.getByText(/2 · Cybercrime report update/)).toBeTruthy();

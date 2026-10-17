@@ -17,7 +17,7 @@ const p = await context.newPage(),
 p.setDefaultTimeout(90000);
 desk.setDefaultTimeout(90000);
 answers.setDefaultTimeout(90000);
-const base = "http://127.0.0.1:8188",
+const base = process.env.CASEPROOF_BASE_URL || "http://127.0.0.1:8188",
   checks = [],
   audits = [],
   errors = [];
@@ -177,11 +177,11 @@ try {
     .getByRole("button", { name: "Start a fresh practice session" })
     .click();
   assert.equal((await fresh).status(), 200);
-  await p.getByRole("button", { name: /Samer/ }).waitFor({ timeout: 90000 });
+  await p.locator(".customer-option:has(.incident-hint)").first().waitFor({ timeout: 90000 });
   await p.waitForFunction(
     () => !document.querySelector(".customer-option")?.disabled,
   );
-  await p.getByRole("button", { name: /Samer/ }).click();
+  await p.locator(".customer-option:has(.incident-hint)").first().click();
   await p
     .getByRole("button", { name: "Continue with selected customer" })
     .click();
@@ -190,7 +190,7 @@ try {
     tx = me.transactions.find((t) => t.txn_id.endsWith("-T1"));
   assert.ok(tx);
   check(
-    "Samer has compact bank-backed practice payee",
+    "Selected scam victim has compact bank-backed practice payee",
     tx.payee.startsWith("narmada.traders.") && tx.payee.length < 50,
   );
   await desk.goto(base + "/app/#/staff/queue");
@@ -262,7 +262,7 @@ try {
   check(
     "Local provider explanation replaces disabled AI affordance",
     (await p
-      .getByText("AI writing is unavailable on this local stack", {
+      .getByText("AI writing is unavailable for the configured provider", {
         exact: false,
       })
       .isVisible()) &&

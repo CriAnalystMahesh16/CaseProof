@@ -10,10 +10,9 @@ from pydantic import BaseModel, Field
 from caseproof.adapters.bank_factory import bank_services
 from caseproof.adapters.firestore_casestore import identity
 from caseproof.adapters.sqlite_casestore import ConflictError
-from caseproof.api.victim import Complaint, PaymentDecision, PracticeScenario, Session
-
 from caseproof.api.demo_evidence import SampleEvidence, capabilities, render_sample
 from caseproof.api.ui_views import victim_receipt
+from caseproof.api.victim import Complaint, PaymentDecision, PracticeScenario, Session
 from caseproof.cloud.bank_network import CloudBankNetwork
 from caseproof.domain.contracts import CaseSnapshot, hash_json, now
 

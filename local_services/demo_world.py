@@ -75,7 +75,7 @@ class DemoWorld:
             # Bound the writer lock to one network so background pool refill
             # cannot monopolise receipt generation or live customer reads.
             # The ready marker still appears only after the whole world exists.
-            for index in range(len(NAMES)):
+            for index in range(6):
                 with DuckDBBank(self.o.s.duckdb_path).connect():
                     nid = f"CEDAR-{self.namespace}-{index + 1}"
                     # Generate once, remap downstream institutions, then import through the
@@ -93,10 +93,11 @@ class DemoWorld:
                         raw = raw.replace("Lotus Demo Bank", BANKS[1 + index * 2 % 9])
                         raw = raw.replace("Tulip Demo Bank", BANKS[1 + (index * 2 + 1) % 9])
                         saved = json.loads(raw)
-                    saved["dataset"]["customers"][0]["display_name"] = NAMES[index] + " (synthetic)"
-                    for account in saved["dataset"]["accounts"]:
-                        if account["id"] == saved["dataset"]["customers"][0]["account"]:
-                            account["label"] = NAMES[index]
+                    for j, customer in enumerate(saved["dataset"]["customers"]):
+                        customer["display_name"] = NAMES[index * 2 + j] + " (synthetic)"
+                        for account in saved["dataset"]["accounts"]:
+                            if account["id"] == customer["account"]:
+                                account["label"] = NAMES[index * 2 + j]
                     saved["manifest"]["customers"] = saved["dataset"]["customers"]
                     from caseproof.api.bank_contracts import BankBatch
                     from caseproof.domain.contracts import hash_json

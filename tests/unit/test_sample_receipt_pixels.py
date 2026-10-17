@@ -7,7 +7,10 @@ from local_services.ocr import recognize
 
 
 @pytest.mark.skipif(shutil.which("tesseract") is None, reason="Linux OCR image supplies Tesseract")
-def test_cropped_sample_ist_time_and_payee_survive_real_pixel_read_without_guessing_reference():
+@pytest.mark.parametrize("suffix", ["nwwatmcffm", "tufuksudmu", "knahwrthtd", "rrkhmscska"])
+def test_cropped_sample_ist_time_and_payee_survive_real_pixel_read_without_guessing_reference(
+    suffix,
+):
     # Zero/O in uppercase references is genuinely ambiguous to OCR. A labelled
     # crop follows the existing bank-simulator receipt contract; matching still
     # requires both sourced payee and time, never the amount alone.
@@ -16,7 +19,7 @@ def test_cropped_sample_ist_time_and_payee_survive_real_pixel_read_without_guess
         "txn_id": "SIM-8FF0B71441-T1",
         "amount_minor": 5100000,
         "ts": "2026-10-17T14:00:00+00:00",
-        "payee": "narmada.traders.nwwatmcffm@cedardemo",
+        "payee": f"narmada.traders.{suffix}@cedardemo",
         "reference": reference,
     }
     image, generator = render_sample(

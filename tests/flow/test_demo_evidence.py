@@ -8,13 +8,18 @@ from caseproof.domain.clock import clock_state
 from tests.flow.test_victim_flow import settings
 
 
-def test_every_selectable_customer_has_independent_recent_scam_payments(tmp_path):
+def test_marked_victims_have_independent_recent_scam_payments_and_other_customers_stay_normal(
+    tmp_path,
+):
     with TestClient(create_app(settings(tmp_path))) as client:
         assert client.post("/v1/victim/demo-session").status_code == 200
         people = client.get("/v1/victim/demo-customers").json()["customers"]
         assert len(people) == 12
+        assert len({person["display_name"] for person in people}) == 12
+        victims = [person for person in people if person.get("incident")]
+        assert len(victims) == 6
         networks, roots = set(), set()
-        for person in people:
+        for person in victims:
             assert (
                 client.post(
                     "/v1/victim/sessions", json={"customer_id": person["account"]}
@@ -27,15 +32,29 @@ def test_every_selectable_customer_has_independent_recent_scam_payments(tmp_path
             assert 0 < clock_state(first["ts"]).golden_hour_remaining <= 60
             networks.add(person["network_id"])
             roots.add(first["txn_id"])
-        assert len(networks) == len(roots) == 12
-        # Samer used to have only a small unrelated merchant payment.
-        assert people[1]["display_name"].startswith("Samer")
+        assert len(networks) == len(roots) == 6
+        for person in (person for person in people if not person.get("incident")):
+            assert (
+                client.post(
+                    "/v1/victim/sessions", json={"customer_id": person["account"]}
+                ).status_code
+                == 200
+            )
+            rows = client.get("/v1/victim/me").json()["transactions"]
+            assert rows and all(not row["txn_id"].endswith("-T1") for row in rows)
 
 
 def test_samples_are_owned_real_pngs_and_local_mode_never_claims_ai(tmp_path):
     with TestClient(create_app(settings(tmp_path))) as client:
         people = client.get("/v1/victim/demo-customers").json()["customers"]
-        client.post("/v1/victim/sessions", json={"customer_id": people[1]["account"]})
+        client.post(
+            "/v1/victim/sessions",
+            json={
+                "customer_id": next(person for person in people if person.get("incident"))[
+                    "account"
+                ]
+            },
+        )
         tx = next(
             t
             for t in client.get("/v1/victim/me").json()["transactions"]
@@ -57,7 +76,14 @@ def test_samples_are_owned_real_pngs_and_local_mode_never_claims_ai(tmp_path):
             ).status_code
             == 503
         )
-        client.post("/v1/victim/sessions", json={"customer_id": people[0]["account"]})
+        client.post(
+            "/v1/victim/sessions",
+            json={
+                "customer_id": next(person for person in people if not person.get("incident"))[
+                    "account"
+                ]
+            },
+        )
         assert (
             client.post(
                 "/v1/victim/sample-evidence",
@@ -70,7 +96,11 @@ def test_samples_are_owned_real_pngs_and_local_mode_never_claims_ai(tmp_path):
 
 def test_priority_is_available_before_ocr_without_granting_readiness(tmp_path):
     with TestClient(create_app(settings(tmp_path))) as client:
-        person = client.get("/v1/victim/demo-customers").json()["customers"][1]
+        person = next(
+            person
+            for person in client.get("/v1/victim/demo-customers").json()["customers"]
+            if person.get("incident")
+        )
         client.post("/v1/victim/sessions", json={"customer_id": person["account"]})
         transactions = client.get("/v1/victim/me").json()["transactions"]
         selected = [t["txn_id"] for t in transactions if t["txn_id"].endswith(("-HISTORY", "-T1"))]
@@ -79,7 +109,7 @@ def test_priority_is_available_before_ocr_without_granting_readiness(tmp_path):
             json={
                 "submission_id": "priority-before-ai",
                 "narrative": "Please review these payments.",
-                "transaction_ids": selected,
+                "transaction_ids": selected + selected,
                 "payment_authorisation": "unsure",
             },
         )
@@ -87,6 +117,7 @@ def test_priority_is_available_before_ocr_without_granting_readiness(tmp_path):
         cid = response.json()["case_id"]
         snapshot = client.app.state.orchestrator.store.get(cid)
         assert not snapshot.segments and not snapshot.ledger_matches
+        assert len(snapshot.trail["intake_debit_times"]) == len(selected)
         flow = client.get(f"/v1/cases/{cid}/workflow").json()
         assert 0 < flow["clock"]["golden_hour_remaining"] <= 60
         assert flow["confirmed_disputed_minor"] == 0

@@ -56,11 +56,11 @@ export default function SampleEvidence({
           Use AI to write the fictional example
         </label>
       )}
-      {!resource.data?.ai_available && (
+      {resource.loading && <p className="muted" role="status">Checking sample-writing capabilities…</p>}
+      {!resource.loading && !resource.error && !resource.data?.ai_available && (
         <p className="muted">
-          Local practice: create sample documents below or upload your own
-          evidence. AI writing is unavailable on this local stack; it requires a
-          configured live provider.
+          Create sample documents below or upload your own evidence.
+          AI writing is unavailable for the configured provider in this environment.
         </p>
       )}
       {!selected.length && (

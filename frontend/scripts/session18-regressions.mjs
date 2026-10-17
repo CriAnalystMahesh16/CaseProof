@@ -1,6 +1,7 @@
 import { chromium } from "playwright";
 import fs from "node:fs/promises";
 import assert from "node:assert/strict";
+import {fileURLToPath} from "node:url";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const base = "http://caseproof-journey.localhost:8188";
@@ -23,7 +24,7 @@ const check = (name, value) => {
 };
 const shot = (name) =>
   page.screenshot({
-    path: new URL(name + ".png", out).pathname.replace(/^\/(\w:)/, "$1"),
+    path: fileURLToPath(new URL(name + ".png", out)),
   });
 const cid = "CASE-0999285a134ff919";
 const read = (path) =>

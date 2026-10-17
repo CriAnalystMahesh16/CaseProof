@@ -4,7 +4,6 @@ import re
 import textwrap
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
-from pathlib import Path
 from typing import Literal
 
 from fastapi import HTTPException
@@ -102,17 +101,14 @@ def render_sample(o, person_account, transaction, body):
     else:
         header.append("Scenario: " + transaction["txn_id"])
     rendered = [part for line in header + lines for part in textwrap.wrap(line, 88)]
-    fonts = [
-        Path(__file__).resolve().parents[1] / "assets/fonts/JetBrainsMono-Regular.ttf",
-        Path("C:/Windows/Fonts/arial.ttf"),
-        Path("/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf"),
-    ]
-    face = next((p for p in fonts if p.exists()), None)
-    font = ImageFont.truetype(str(face), 28) if face else ImageFont.load_default(size=28)
-    image = Image.new("RGB", (1500, 70 + len(rendered) * 48), "white")
+    # Use Pillow's embedded sans font consistently on the API and cloud images.
+    # The dotted VPA can lose a low-confidence prefix in monospaced OCR. Improve
+    # the actual practice pixels rather than guessing a missing payee from bank data.
+    font = ImageFont.load_default(size=26)
+    image = Image.new("RGB", (1500, 70 + len(rendered) * 80), "white")
     draw = ImageDraw.Draw(image)
     for index, line in enumerate(rendered):
-        draw.text((28, 28 + index * 48), line, font=font, fill="#193544")
+        draw.text((35, 35 + index * 80), line, font=font, fill="#172f40")
     out = BytesIO()
     image.save(out, format="PNG")
     return out.getvalue(), generator
