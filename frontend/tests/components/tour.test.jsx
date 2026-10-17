@@ -13,7 +13,7 @@ vi.mock("../../src/state/resources.jsx", async (original) => ({
   ...(await original()),
   useSession: () => ({ persona: "analyst" }),
 }));
-import TourOverlay from "../../src/tour/Tour.jsx";
+import TourOverlay, { TourButton } from "../../src/tour/Tour.jsx";
 import { STEPS, CHAPTERS } from "../../src/tour/steps.js";
 import { tour, caseFromRoute } from "../../src/tour/store.js";
 
@@ -133,10 +133,59 @@ it("stays on the current entry point and cannot skip uncompleted intake actions"
   expect(screen.getByRole("dialog")).toBeTruthy();
 });
 
-it('allows Back/resume into an intake step whose action is already satisfied',()=>{
- const evidence=document.createElement('h2');evidence.dataset.tour='report-evidence';document.body.append(evidence);
- render(<TourOverlay/>);
- act(()=>tour.start(2));
- expect(screen.getByRole('button',{name:/Next/}).disabled).toBe(false);
- evidence.remove();
+it("allows Back/resume into an intake step whose action is already satisfied", () => {
+  const evidence = document.createElement("h2");
+  evidence.dataset.tour = "report-evidence";
+  document.body.append(evidence);
+  render(<TourOverlay />);
+  act(() => tour.start(2));
+  expect(screen.getByRole("button", { name: /Next/ }).disabled).toBe(false);
+  evidence.remove();
+});
+
+it("launcher restarts an interrupted tour from the reporting entrance, not a stale step or case", () => {
+  act(() => {
+    tour.setCase("OLD");
+    tour.start(3);
+    tour.stop();
+  });
+  location.hash = "#/staff/cases/OLD/review";
+  render(
+    <>
+      <TourButton />
+      <TourOverlay />
+    </>,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Tour" }));
+  expect(tour.get()).toMatchObject({ active: true, index: 0, caseId: null });
+  expect(location.hash).toBe("#/victim/start");
+  expect(screen.getByText("Welcome: the golden hour")).toBeTruthy();
+});
+it("shows loading guidance before declaring a missing target", async () => {
+  vi.useFakeTimers();
+  render(<TourOverlay />);
+  act(() => tour.start(2));
+  await act(async () => vi.advanceTimersByTime(3000));
+  expect(screen.getByText(/Preparing this step/)).toBeTruthy();
+  expect(
+    screen.queryByText(/This panel is not on the current screen yet/),
+  ).toBeNull();
+  cleanup();
+  vi.useRealTimers();
+});
+
+it("global launcher reopens the welcome dialog even when guidance was minimised", () => {
+  render(
+    <>
+      <TourButton />
+      <TourOverlay />
+    </>,
+  );
+  act(() => tour.start(2));
+  fireEvent.click(screen.getByRole("button", { name: "Minimise guidance" }));
+  expect(screen.queryByRole("dialog")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Tour" }));
+  expect(
+    screen.getByRole("heading", { name: "Welcome: the golden hour" }),
+  ).toBeTruthy();
 });

@@ -14,6 +14,9 @@ const context = await browser.newContext({
 const p = await context.newPage(),
   desk = await context.newPage(),
   answers = await context.newPage();
+p.setDefaultTimeout(90000);
+desk.setDefaultTimeout(90000);
+answers.setDefaultTimeout(90000);
 const base = "http://127.0.0.1:8188",
   checks = [],
   audits = [],

@@ -10,7 +10,7 @@ def test_new_complaint_refreshes_past_filing_time_without_waiting_for_ttl(tmp_pa
     engine = create_engine("sqlite://")
     with engine.begin() as db:
         db.execute(text("CREATE TABLE cases(tenant_id TEXT,metadata TEXT)"))
-        for account, stamp in [("NEW", 1990), ("OLD", 1800), ("THIRD", 1700)]:
+        for account, stamp in [("NEW", 1990), ("OLD", 900), ("THIRD", 800)]:
             from datetime import datetime, timezone
 
             db.execute(
@@ -44,8 +44,8 @@ def test_new_complaint_refreshes_past_filing_time_without_waiting_for_ttl(tmp_pa
             {
                 "networks": {
                     "NEW": {"status": "observed", "attempt_at": 1980, "observed_at": 1980},
-                    "OLD": {"status": "observed", "attempt_at": 1800, "observed_at": 1800},
-                    "THIRD": {"status": "observed", "attempt_at": 1700, "observed_at": 1700},
+                    "OLD": {"status": "observed", "attempt_at": 1000, "observed_at": 1000},
+                    "THIRD": {"status": "observed", "attempt_at": 900, "observed_at": 900},
                 }
             }
         )
@@ -63,6 +63,10 @@ def test_new_complaint_refreshes_past_filing_time_without_waiting_for_ttl(tmp_pa
     monkeypatch.setattr("local_services.demo_world.BankNetwork", Network)
     world.tick()
     assert calls == ["NEW", "THIRD"]  # urgent coverage first; bounded background work
+    world.tick()
+    assert calls == ["NEW", "THIRD", "OLD"]
+    # Routine idle polling must not republish fresh observations after two minutes.
+    monkeypatch.setattr("local_services.demo_world.time.time", lambda: 2121)
     world.tick()
     assert calls == ["NEW", "THIRD", "OLD"]
     assert "UNUSED" not in json.loads(cursor.read_text())["networks"]

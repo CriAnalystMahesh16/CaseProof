@@ -205,3 +205,28 @@
   z-index: 901;
   box-shadow: var(--shadow-2);
 }
+
+.tour-loading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--ink-2);
+  padding: 10px;
+  background: var(--surface-2);
+  border-radius: 8px;
+}
+.tour-spinner {
+  flex-shrink: 0;
+  animation: tour-spin 1s linear infinite;
+}
+@keyframes tour-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tour-spinner {
+    animation: none;
+  }
+}

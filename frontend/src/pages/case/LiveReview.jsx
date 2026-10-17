@@ -153,6 +153,22 @@ export default function Review({ view, reload, stale }) {
                 : "Not yet eligible"}
             </Badge>
             <p>{w.urgent_referral.reason}</p>
+            <details className="referral-help">
+              <summary>When would I use this?</summary>
+              <p>
+                A customer reports a safe-account scam. The bank confirms the
+                disputed debit, but the complete narrative or downstream trail
+                is still being clarified. An authorised reviewer can approve an
+                early alert about that identified transaction without claiming
+                the full investigation is complete.
+              </p>
+              <p>
+                Eligibility comes from the current server assessment: a matched
+                disputed debit, no material conflict and no unprocessed
+                evidence. Delivery is an acknowledgement, not a freeze or
+                refund.
+              </p>
+            </details>
             <div className="bound">
               {w.urgent_referral.transaction_ids?.map((id) => (
                 <div className="mono" key={id}>

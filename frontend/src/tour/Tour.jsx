@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Compass, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Compass, LoaderCircle, X } from "lucide-react";
 import { go, useRoute } from "../router.js";
 import { apiRequest } from "../api/client.js";
 import { useSession, useResource } from "../state/resources.jsx";
@@ -58,7 +58,13 @@ function insertExample() {
 
 export function TourButton({ className = "btn sm", label = "Tour" }) {
   return (
-    <button className={className} onClick={() => tour.start(tour.get().index)}>
+    <button
+      className={className}
+      onClick={() => {
+        go("/victim/start");
+        tour.restart();
+      }}
+    >
       <Compass size={13} /> {label}
     </button>
   );
@@ -66,7 +72,22 @@ export function TourButton({ className = "btn sm", label = "Tour" }) {
 
 export default function TourOverlay() {
   const state = useTour();
-  return state.active ? <ActiveTour state={state} /> : <CaseTracker />;
+  useEffect(() => {
+    const url = new URL(location.href);
+    if (url.searchParams.get("tour") !== "start") return;
+    url.searchParams.delete("tour");
+    history.replaceState(
+      history.state,
+      "",
+      url.pathname + url.search + url.hash,
+    );
+    tour.restart();
+  }, []);
+  return state.active ? (
+    <ActiveTour key={state.launch || 0} state={state} />
+  ) : (
+    <CaseTracker />
+  );
 }
 
 function HandoffChecklist({ caseId, onComplete }) {
@@ -145,6 +166,7 @@ function ActiveTour({ state }) {
       : baseStep;
   const [rect, setRect] = useState(null);
   const [missing, setMissing] = useState(false);
+  const [preparing, setPreparing] = useState(false);
   const [notice, setNotice] = useState("");
   const scrolled = useRef(false);
   const titleRef = useRef(null);
@@ -165,6 +187,7 @@ function ActiveTour({ state }) {
     let cancelled = false;
     scrolled.current = false;
     setMissing(false);
+    setPreparing(!!step.target);
     setRect(null);
     setNotice("");
     titleRef.current?.focus({ preventScroll: true });
@@ -177,16 +200,6 @@ function ActiveTour({ state }) {
     (async () => {
       let ctx = tour.get();
       if (step.needsCase && !ctx.caseId) {
-        try {
-          const queue = await apiRequest("/v1/workspace?scope=active", {
-            persona,
-          });
-          const first = queue.cases?.[0]?.case_id;
-          if (first) tour.setCase(first);
-        } catch {
-          /* handled below */
-        }
-        ctx = tour.get();
         if (!ctx.caseId) {
           if (!cancelled)
             setNotice(
@@ -231,9 +244,16 @@ function ActiveTour({ state }) {
       const element = spotlightFor(target);
       if (!element) {
         setRect(null);
-        setMissing(Date.now() - started > 2500);
+        setPreparing(true);
+        const pageLoading = !!document.querySelector(
+          '.loading-state, [aria-busy="true"]',
+        );
+        setMissing(Date.now() - started > (pageLoading ? 125000 : 30000));
         return;
       }
+      setPreparing(
+        !!document.querySelector('.loading-state, [aria-busy="true"]'),
+      );
       setMissing(false);
       if (!scrolled.current) {
         scrolled.current = true;
@@ -375,6 +395,12 @@ function ActiveTour({ state }) {
           {step.body.map((paragraph, i) => (
             <p key={i}>{paragraph}</p>
           ))}
+          {preparing && !missing && !notice && (
+            <p className="tour-loading" role="status" aria-live="polite">
+              <LoaderCircle size={16} className="tour-spinner" /> Preparing this
+              step… You can minimise guidance while the page loads.
+            </p>
+          )}
           {missing && step.optional && (
             <p className="tour-note">
               Not shown for this case yet. {step.absent}
@@ -388,6 +414,17 @@ function ActiveTour({ state }) {
             </p>
           )}
           {notice && <p className="tour-note">{notice}</p>}
+          {(missing || notice) && (
+            <button
+              className="btn sm"
+              onClick={() => {
+                go("/victim/start");
+                tour.restart();
+              }}
+            >
+              Restart guidance
+            </button>
+          )}
           {step.example && (
             <div className="tour-example">
               <q>{EXAMPLE_NARRATIVE}</q>
@@ -456,7 +493,7 @@ function ActiveTour({ state }) {
           ) : (
             <button
               className="btn sm primary"
-              disabled={waiting}
+              disabled={waiting || (step.needsCase && !state.caseId)}
               onClick={() => tour.next()}
             >
               Next <ArrowRight size={13} />

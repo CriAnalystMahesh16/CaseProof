@@ -36,6 +36,8 @@ function set(patch) {
 export const tour = {
   get: () => state,
   start: (index = 0) => set({ active: true, index }),
+  restart: (caseId = null) =>
+    set({ active: true, index: 0, caseId, launch: (state.launch || 0) + 1 }),
   stop: () => set({ active: false }),
   goTo: (index) =>
     set({ index: Math.min(Math.max(index, 0), STEPS.length - 1) }),

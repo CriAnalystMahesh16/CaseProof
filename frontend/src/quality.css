@@ -853,3 +853,76 @@
 .intake-result { padding: 12px; border-radius: 8px; background: rgba(124, 92, 255, 0.07); display: grid; gap: 6px; }
 .intake-result ul { margin: 0; padding-left: 18px; }
 .packet-gemini { margin: 8px 0 12px; display: grid; gap: 6px; }
+
+/* Keep the identity avatar on the same baseline as the selected role. */
+.studio-app .staff-identity {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.studio-app .staff-identity > .avatar {
+  display: flex;
+  width: 30px;
+  height: 30px;
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+.studio-app .request-explanation {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px 16px;
+}
+.studio-app .request-explanation > p {
+  margin: 0;
+}
+.studio-app .request-explanation > .banner {
+  margin: 0;
+  width: 100%;
+}
+.studio-app .case-summary {
+  min-width: 0;
+}
+@media (max-width: 767px) {
+  .studio-app .case-h {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .studio-app .case-h .case-summary,
+  .studio-app .case-h .stats {
+    grid-column: 1;
+    width: 100%;
+    min-width: 0;
+  }
+  .studio-app .case-h .stats {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 12px 0;
+    margin: 4px 0 0;
+  }
+  .studio-app .case-h .stat:first-child {
+    border-left: 0;
+    padding-left: 0;
+  }
+  .studio-app .case-h .case-summary > .mono {
+    overflow-wrap: break-word;
+    word-break: normal;
+  }
+  .studio-app .staff-identity {
+    gap: 7px;
+  }
+  .studio-app .top .staff-identity > .avatar {
+    display: flex;
+  }
+}
+@media (max-width: 420px) {
+  .studio-app .top {
+    padding-inline: 10px;
+    gap: 6px;
+  }
+  .studio-app .top .demo-chip {
+    display: none;
+  }
+}

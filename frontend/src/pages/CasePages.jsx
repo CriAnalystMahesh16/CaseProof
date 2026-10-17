@@ -371,7 +371,7 @@ function Requests({ view, reload, stale }) {
             title="Why this request?"
             sub="A useful answer should change the next decision"
           />
-          <div className="card-b">
+          <div className="card-b request-explanation">
             <p>
               {proposal?.reason ||
                 "Already settled facts are not requested again."}

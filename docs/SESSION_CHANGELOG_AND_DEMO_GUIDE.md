@@ -1,3 +1,5 @@
+> **18 October provider correction:** The deployed staging workflow already passed a live Google Document AI + Vertex AI Gemini journey on 17 October (see INTEGRATION_RESULTS.md). Earlier wording below described the isolated local regression environment too broadly. It must not be read as a claim that deployed Gemini is unavailable or unverified. Google staff sign-in and institutional bank connectivity are separate capabilities. Current repairs and validation are recorded in SESSION_2026_10_18_UX_AND_ANALYST_VALUE.md.
+
 # CaseProof: previous integration and UX repair record
 
 Worktree: `C:/Users/sanka/.codex/worktrees/landing-demo-journey/CaseProof`
@@ -72,7 +74,7 @@ First contact is optional. It is not the submission time. The backend records su
 2. Start a fresh practice session. Select Samer or any supported customer and continue to the account home. Minimise guidance while operating controls if needed.
 3. Report a payment scam. Payments are newest first. Select the actual payment belonging to the story, using the displayed amount/time; do not copy a fixed amount from another session.
 4. Describe what happened and how the payment was authorised. Leave unknown contact time blank. If entering a time after the payment, review the warning before explicitly retaining it.
-5. Upload supported evidence or use the local sample buttons. These create labelled PNGs, not bank records. Local AI writing is unavailable; live Google remains unverified. Review and submit.
+5. Upload supported evidence or use the local sample buttons. These create labelled PNGs, not bank records. Sample-writing availability follows the connected backend capabilities; inspect the provider information for this environment. Review and submit.
 6. An open analyst queue receives the alert automatically. Switching through Continue as analyst demo opens the exact submitted case. Inspect the cited brief, processing state, originals, bank matches and money trail.
 7. If the backend proposes a relevant question, review/send it, answer through its scoped customer link and wait for the resulting revision. Confirm or deny any additional candidate debit explicitly. Do not invent a reply just to remove a gap.
 8. As analyst, inspect the proposed handoff. Switch the labelled practice identity to reviewer only for the independent approval step. Approve only the current supported revision/digest with a reason.

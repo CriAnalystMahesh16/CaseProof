@@ -243,7 +243,10 @@ class DemoWorld:
             # when a pre-complaint observation is still fresh. Failed refreshes
             # back off instead of retrying on every worker iteration.
             needs_coverage = observed < reported
-            interval = 10 if state.get("status") == "unavailable" else 120
+            # Successful synthetic observations need refreshing near the 15-minute
+            # bank freshness boundary, not every two minutes. New complaints still
+            # receive immediate coverage; failed reads retain their short retry.
+            interval = 10 if state.get("status") == "unavailable" else 840
             if (
                 needs_coverage
                 and state.get("status") != "unavailable"

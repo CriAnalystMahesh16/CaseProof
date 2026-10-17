@@ -39,11 +39,7 @@ import Queue from "./pages/LiveQueue.jsx";
 import GoldenHourAlert from "./components/GoldenHourAlert.jsx";
 import CasePages from "./pages/CasePages.jsx";
 import { auth } from "./api/auth.js";
-import {
-  queueChanges,
-  initialPriorityAlerts,
-  refreshAlertRows,
-} from "./models/queue.js";
+import { notificationLedger, visibleNotifications } from "./models/queue.js";
 import StaffSignIn from "./components/StaffSignIn.jsx";
 import Victim from "./pages/victim/Victim.jsx";
 import { TourButton } from "./tour/Tour.jsx";
@@ -149,31 +145,56 @@ function Staff({ route }) {
       apiRequest("/v1/workspace?scope=" + resourceScope, { persona, signal }),
     5000,
   );
-  const previous = useRef(null);
-  const [alerts, setAlerts] = useState([]),
-    [showAlerts, setShowAlerts] = useState(false);
+  // The active practice queue drives notifications even on the historical Cases screen.
+  const activeNotifications = useResource(
+    "notification-queue:" + persona,
+    (signal) => apiRequest("/v1/workspace?scope=active", { persona, signal }),
+    resourceScope === "active" ? false : 5000,
+  );
+  const notificationQueue =
+    resourceScope === "active" ? queue : activeNotifications;
+  const [ledger, setLedger] = useState(() => {
+    try {
+      return (
+        JSON.parse(sessionStorage.getItem("cp-notifications-v1")) || {
+          initialized: false,
+          known: [],
+          events: [],
+        }
+      );
+    } catch {
+      return { initialized: false, known: [], events: [] };
+    }
+  });
+  const [showAlerts, setShowAlerts] = useState(false);
+  const notificationRows = notificationQueue.data?.cases || [];
+  const alerts = visibleNotifications(ledger, notificationRows);
+  const setAlerts = (update) =>
+    setLedger((old) => {
+      const changed = update(visibleNotifications(old, notificationRows));
+      const read = new Map(changed.map((event) => [event.eventId, event.seen]));
+      return {
+        ...old,
+        events: old.events.map((event) =>
+          read.has(event.eventId)
+            ? { ...event, seen: read.get(event.eventId) }
+            : event,
+        ),
+      };
+    });
   useEffect(() => {
-    if (!queue.data) return;
-    const changes =
-      previous.current === null
-        ? initialPriorityAlerts(queue.data.cases || [])
-        : queueChanges(previous.current, queue.data.cases || []);
-    previous.current = queue.data.cases || [];
-    setAlerts((old) =>
-      [
-        ...changes.map((c) => ({
-          ...c,
-          eventId: c.case_id + ":" + c.status + ":" + Date.now(),
-          seen: false,
-        })),
-        ...refreshAlertRows(old, queue.data.cases || []),
-      ].slice(0, 30),
+    if (!notificationQueue.data) return;
+    setLedger((old) =>
+      notificationLedger(old, notificationQueue.data.cases || []),
     );
-  }, [queue.data]);
+  }, [notificationQueue.data]);
   useEffect(() => {
-    previous.current = null;
-    setAlerts([]);
-  }, [persona, resourceScope]);
+    try {
+      sessionStorage.setItem("cp-notifications-v1", JSON.stringify(ledger));
+    } catch {
+      /* read state still survives identity changes in memory */
+    }
+  }, [ledger]);
   const parts = route.split("/"),
     caseId = parts[2] === "cases" ? parts[3] : null,
     tab = (parts[4] || "overview").split("?")[0];
@@ -182,7 +203,7 @@ function Staff({ route }) {
       setAlerts((old) =>
         old.map((a) => (a.case_id === caseId ? { ...a, seen: true } : a)),
       );
-  }, [caseId]);
+  }, [caseId, notificationQueue.data]);
   return (
     <div className={"app studio-app " + (menu ? "menu-open" : "")}>
       <aside className="side">
@@ -313,32 +334,34 @@ function Staff({ route }) {
               </div>
             )}
           </div>
-          {auth.personas ? (
-            <label className="persona-label" data-tour="persona">
-              Demo identity
-              <select
-                aria-label="Staff persona"
-                value={persona}
-                onChange={(e) => setPersona(e.target.value)}
+          <div className="staff-identity">
+            {auth.personas ? (
+              <label className="persona-label" data-tour="persona">
+                Demo identity
+                <select
+                  aria-label="Staff persona"
+                  value={persona}
+                  onChange={(e) => setPersona(e.target.value)}
+                >
+                  <option value="analyst">Analyst demo</option>
+                  <option value="reviewer">Reviewer demo</option>
+                </select>
+              </label>
+            ) : (
+              <button
+                className="btn sm"
+                onClick={() => {
+                  auth.clear();
+                  location.reload();
+                }}
               >
-                <option value="analyst">Analyst demo</option>
-                <option value="reviewer">Reviewer demo</option>
-              </select>
-            </label>
-          ) : (
-            <button
-              className="btn sm"
-              onClick={() => {
-                auth.clear();
-                location.reload();
-              }}
-            >
-              Sign out
-            </button>
-          )}
-          <span className="avatar">
-            {!auth.personas ? "ST" : persona === "reviewer" ? "RV" : "AN"}
-          </span>
+                Sign out
+              </button>
+            )}
+            <span className="avatar">
+              {!auth.personas ? "ST" : persona === "reviewer" ? "RV" : "AN"}
+            </span>
+          </div>
         </header>
         <details className="role-help">
           <summary>
@@ -351,6 +374,15 @@ function Staff({ route }) {
             and approves or rejects it with a reason. An analyst cannot approve
             their own handoff. In this practice, use Demo identity to try each
             role; in a bank they are separately authorised staff.
+          </p>
+          <p>
+            Both roles can read Overview, Evidence, Money Trail, Requests,
+            Review &amp; decision, Delivery and Audit so an independent reviewer
+            can trace the proposed action to its sources. Analyst actions
+            include clarification requests, corrections and follow-up ownership.
+            Reviewer actions include urgent-referral approval, handoff approval
+            and sending the approved packet. The server enforces these
+            permissions.
           </p>
         </details>
         {(() => {
@@ -456,7 +488,7 @@ function Case({ caseId, tab }) {
         <>
           <div className="case-h" data-tour="case-header">
             <span className="avatar lg">CP</span>
-            <div className="col gap6 grow">
+            <div className="col gap6 grow case-summary">
               <div className="mono muted">Cases / {caseId}</div>
               <div className="row gap8 wrap">
                 <h1>Investigation brief</h1>
