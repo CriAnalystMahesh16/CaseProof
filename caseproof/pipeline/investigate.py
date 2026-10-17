@@ -89,6 +89,13 @@ def assess(o: Any, snap: Any, investigate: Any = True) -> Any:
                 c.normalized_value
                 for c in snap.claims
                 if c.kind == "payee_vpa" and c.evidence_state not in ("unresolved", "conflicted")
+            ]
+            # Bank-confirmed payees of matched debits link repeat complaints even when
+            # the customer did not write the UPI ID down.
+            + [
+                m.resolved_fields["payee_vpa"]
+                for m in snap.ledger_matches
+                if m.resolved_fields.get("payee_vpa")
             ],
             [
                 c.normalized_value

@@ -162,8 +162,15 @@ class CloudBankIngestion:
                         normalized(body.get("payee") or ""),
                         normalized(body.get("caller_number") or ""),
                     } - {normalized("")}
+                    from caseproof.domain.ledger import dt
+
+                    # Linking looks back 72 hours from a case's own report, so only a
+                    # case reported after this complaint can ever link to it.
+                    reported = case["metadata"].get("reported_at")
                     if (
                         cid == body["complaint_id"]
+                        or not reported
+                        or dt(reported) < dt(body["reported_at"])
                         or not mine & shared
                         or any(link.complaint_id == body["complaint_id"] for link in snap.linked)
                     ):
