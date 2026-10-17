@@ -42,7 +42,7 @@ run "reviewable_plan_keeps_dispatch_paused" {
     error_message = "Public API/frontend must not bypass the Armor load balancer."
   }
   assert {
-    condition     = google_cloud_tasks_queue.processing.rate_limits[0].max_concurrent_dispatches <= 5 && google_cloud_run_v2_service.backend["worker"].template[0].scaling[0].max_instance_count <= 3
+    condition     = google_cloud_tasks_queue.processing.rate_limits[0].max_concurrent_dispatches <= 5 && google_cloud_run_v2_service.backend["worker"].template[0].scaling[0].max_instance_count <= 5
     error_message = "Prototype worker and task concurrency must remain bounded."
   }
   assert {

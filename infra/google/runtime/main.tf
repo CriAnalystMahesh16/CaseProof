@@ -117,6 +117,14 @@ resource "google_bigquery_dataset_iam_member" "bank_write" {
   role       = "roles/bigquery.dataEditor"
   member     = "serviceAccount:${google_service_account.runtime["worker"].email}"
 }
+# The API publishes a new practice session's synthetic bank batches directly so a
+# judge does not wait behind complaint processing in the shared queue.
+resource "google_bigquery_dataset_iam_member" "bank_write_api" {
+  project    = var.project_id
+  dataset_id = "caseproof_bank"
+  role       = "roles/bigquery.dataEditor"
+  member     = "serviceAccount:${google_service_account.runtime["api"].email}"
+}
 resource "google_storage_bucket_iam_member" "evidence" {
   for_each = { for pair in setproduct(["api", "worker"], ["roles/storage.objectCreator", "roles/storage.objectViewer"]) : "${pair[0]}-${pair[1]}" => pair }
   bucket   = local.evidence_bucket
@@ -143,7 +151,7 @@ resource "google_cloud_run_v2_service" "backend" {
     scaling {
       # API and worker stay warm: a cold start added ~30 s to a judge's first session.
       min_instance_count = contains(["api", "worker"], each.key) ? 1 : 0
-      max_instance_count = each.key == "simulator" ? 1 : each.key == "worker" ? 3 : 2
+      max_instance_count = each.key == "simulator" ? 1 : each.key == "worker" ? 5 : 2
     }
     containers {
       image   = var.application_image

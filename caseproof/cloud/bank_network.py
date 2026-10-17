@@ -97,30 +97,47 @@ class CloudBankNetwork(BankNetwork):
             batch["transactions"] = []
             for cover in batch["coverage"]:
                 cover.update(as_of=observed, end=observed)
-            self.o.bank_ingestion.ingest(BankBatch.model_validate(batch), actor)
+            batch_publication = self.o.bank_ingestion.ingest(
+                BankBatch.model_validate(batch), actor
+            )["publication_id"]
             due = cash_outs(saved, observed)
-            refreshed = []
-            for r in reports:
-                update_id = r["update_id"] + suffix
-                moved = [
-                    {**w, "source": "cfcfrms_update:" + update_id}
-                    for w in due
-                    if w["from_account"] == r["account"]
-                ]
-                refreshed.append(
+            # Each withdrawal gets one fixed report (stable id and content, so a later
+            # refresh re-sends it as a duplicate); refreshes carry only the balance.
+            running = {r["account"]: r["balance_minor"] for r in reports}
+            banks = {r["account"]: r["reporting_bank"] for r in reports}
+            cash_reports = []
+            for w in due:
+                account = w["from_account"]
+                running[account] -= w["amount_minor"]
+                update_id = w["txn_id"] + "-RPT"
+                cash_reports.append(
                     dict(
                         update_id=update_id,
-                        account=r["account"],
-                        reporting_bank=r["reporting_bank"],
-                        reported_at=observed,
-                        balance_minor=r["balance_minor"] - sum(w["amount_minor"] for w in moved),
+                        account=account,
+                        reporting_bank=banks[account],
+                        reported_at=w["ts"],
+                        balance_minor=running[account],
                         credit_received=[],
-                        onward_transfers=moved,
+                        onward_transfers=[{**w, "source": "cfcfrms_update:" + update_id}],
                     )
                 )
+            refreshed = [
+                dict(
+                    update_id=r["update_id"] + suffix,
+                    account=r["account"],
+                    reporting_bank=r["reporting_bank"],
+                    reported_at=observed,
+                    balance_minor=running[r["account"]],
+                    credit_received=[],
+                    onward_transfers=[],
+                )
+                for r in reports
+            ]
+            reports += cash_reports
             reports += refreshed
         return {
             "publications": [self.o.bank_ingestion.downstream(r, actor) for r in reports],
+            "bank_publication": batch_publication if refresh else None,
             "synthetic": True,
         }
 

@@ -75,6 +75,49 @@ def install(app, o):
             raise HTTPException(503, "bank_data_preparing", headers={"Retry-After": "3"})
         return bank_services(o, person["tenant"])[0]
 
+    def refresh_bank(person):
+        """A complaint lies after the session's bank snapshot, so its coverage gap
+        ("bank records up to date") would wait for the scheduled refresh. Refresh
+        this customer's bank now and publish it directly."""
+        from caseproof.adapters.firestore_casestore import identity as key
+        from caseproof.cloud.observability import emit
+
+        actor = SimpleNamespace(role="admin", tenant_id=person["tenant"])
+        network_id = person["profile"]["network_id"]
+        try:
+            result = CloudBankNetwork(o).publish_reports(network_id, actor, refresh=True)
+            docs.transact(
+                lambda tx: tx.set(
+                    "feed_refresh/" + key(person["tenant"], network_id), {"at": time.time()}
+                )
+            )
+        except Exception as error:  # noqa: BLE001 - the scheduled refresh still runs
+            emit("complaint_bank_refresh_deferred", severity="WARNING", error=type(error).__name__)
+            return
+        publish_keys(
+            [result["bank_publication"]] + [p["publication_id"] for p in result["publications"]]
+        )
+
+    def publish_keys(ids):
+        from concurrent.futures import ThreadPoolExecutor
+
+        from caseproof.cloud.observability import emit
+
+        def one(key):
+            try:
+                o.bank_ingestion.publish(key)
+            except Exception as error:  # noqa: BLE001 - the queued task retries it
+                emit("inline_bank_publish_deferred", severity="WARNING", error=type(error).__name__)
+
+        with ThreadPoolExecutor(3) as pool:
+            list(pool.map(one, [i for i in ids if i]))
+
+    def publish_now(generated):
+        """Publish the new session's bank batches here, in parallel, instead of
+        waiting behind complaint processing in the shared task queue. The queued
+        tasks remain as the fallback; publication is idempotent."""
+        publish_keys(sorted({c["publication_id"] for c in generated["customers"]}))
+
     @app.get("/v1/victim/receipts/{txn_id}")
     def receipt(txn_id: str, person=Depends(customer)):
         import json
@@ -138,6 +181,7 @@ def install(app, o):
             )
 
         docs.transact(create)
+        publish_now(generated)
         response.set_cookie(
             "cp_demo", token, secure=True, httponly=True, samesite="strict", max_age=86400
         )
@@ -267,6 +311,7 @@ def install(app, o):
         o.intake.add(cid, body.narrative.encode(), "text/plain", "narrative")
         snap = o.store.get(cid)
         o.jobs.enqueue(cid, snap.revision, priority=10)
+        refresh_bank(person)
         return {"case_id": cid, "bank_reference": "CEDAR-" + cid[5:], "synthetic": True}
 
     @app.get("/v1/victim/complaints/{cid}")
