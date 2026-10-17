@@ -110,3 +110,5 @@ The built-in browser control was unavailable, so actual rendered UI testing used
 The initial two-complaint acceptance run completed its first complaint but timed out downloading the next receipt under local load. The first guided retry also hit a 30-second selector timeout; the rerun with an appropriate bounded wait completed all 35 assertions. These timings are retained as local performance concerns, not hidden as passing results. No synthetic API response was introduced. A separate repeated-flow retry is recorded in the validation receipt if it completes.
 
 `SESSION_2026_10_18_VALIDATION.json` is the checked-in receipt. Large screenshots and generated documents remain under ignored `var/` paths.
+
+The optional additional repeated-flow retry was stopped after making no progress beyond entrance/readiness. It is **not counted as passing**. Local responsiveness with accumulated practice data remains a blocker to calling this production-ready; the separately completed guided and clarification journeys remain valid evidence.

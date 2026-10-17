@@ -120,5 +120,9 @@
     "Initial repeated-flow run completed one complaint but timed out on the next receipt download under local load; retry is recorded separately",
     "Freshness/clock events and actual new external observations can legitimately reprocess a case",
     "Production performance/concurrency and unfamiliar evidence need further acceptance"
-  ]
+  ],
+  "repeated_flow_retry": {
+    "result": "stopped_without_acceptance",
+    "reason": "No progress beyond initial entrance/readiness during optional additional run; completed guided journey and independent clarification journey are recorded separately."
+  }
 }
