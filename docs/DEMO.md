@@ -1,6 +1,8 @@
 # New complaint demonstration
 
-Start the application as described in README. Open two browser tabs on the same
+Start the application as described in README. The quickest path is the built-in
+guided tour (**Take the guided tour** on the entry page), which walks this whole
+flow with explanations; the steps below are the same flow without the tour. Open two browser tabs on the same
 origin so the synthetic practice-session cookie scopes both victim and analyst.
 Do not start from a preloaded complaint.
 

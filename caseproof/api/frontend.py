@@ -1,4 +1,9 @@
-"""Same-origin local web application; the diagnostic Inspector stays available."""
+"""Web routes for the local API service; the diagnostic Inspector stays available.
+
+In the Compose stack the separate frontend service serves the React build and
+proxies API paths here. `create_app` keeps a combined host for single-process
+development and tests.
+"""
 
 import os
 import time
@@ -13,10 +18,11 @@ from caseproof.adapters.customer_links import CustomerLinks
 from caseproof.cloud.body_limit import BodyLimit
 
 
-def integrate_frontend(api, directory):
-    directory = Path(directory)
-    if not (directory / "index.html").is_file():
-        raise RuntimeError("Built frontend index.html is required")
+def integrate_frontend(api, directory=None):
+    if directory is not None:
+        directory = Path(directory)
+        if not (directory / "index.html").is_file():
+            raise RuntimeError("Built frontend index.html is required")
 
     async def home(request):
         return RedirectResponse("/app/#/entry", status_code=303)
@@ -53,12 +59,14 @@ def integrate_frontend(api, directory):
         )
 
     # Insert only explicit web routes. Missing /v1 endpoints retain API 404s.
-    api.router.routes[0:0] = [
+    routes = [
         Route("/", home),
         Route("/customer/{token}", customer),
         Route("/ready", readiness),
-        Mount("/app", app=StaticFiles(directory=directory, html=True)),
     ]
+    if directory is not None:
+        routes.append(Mount("/app", app=StaticFiles(directory=directory, html=True)))
+    api.router.routes[0:0] = routes
     api.add_middleware(BodyLimit)
 
     @api.middleware("http")
@@ -78,3 +86,10 @@ def create_app():
     from caseproof.api.app import app
 
     return integrate_frontend(app, os.environ.get("FRONTEND_DIST", "/app/frontend/dist"))
+
+
+def create_api():
+    """API service only; static assets belong to the frontend service."""
+    from caseproof.api.app import app
+
+    return integrate_frontend(app)

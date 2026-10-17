@@ -265,7 +265,7 @@ function Overview({ view }) {
           </div>
         </Card>
         {(brief.conflicts?.length > 0 || brief.unknowns?.length > 0) && (
-          <Card className="card-b">
+          <Card className="card-b" data-tour="unresolved-matters">
             <h3>Unresolved matters</h3>
             {(brief.unknowns || []).map((x, i) => (
               <p key={i}>

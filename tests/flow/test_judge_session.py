@@ -26,3 +26,48 @@ def test_practice_sessions_have_independent_catalogues_and_queues(tmp_path):
             a.post("/v1/victim/demo-session", headers={"Origin": "http://evil.invalid"}).status_code
             == 403
         )
+
+
+def test_prebuilt_practice_worlds_are_claimed_once_each(tmp_path):
+    from local_services.demo_world import DemoWorld
+
+    app = create_app(settings(tmp_path))
+    o = app.state.orchestrator
+    o.s.practice_pool_size = 2
+    ids = iter(["judge-00000000000a", "judge-00000000000b", "judge-00000000000c"])
+    DemoWorld.fill_pool(o, lambda: next(ids))
+    ready = o.s.data_dir / "demo_worlds" / "ready"
+    assert sorted(p.name for p in ready.iterdir()) == ["judge-00000000000a", "judge-00000000000b"]
+    with TestClient(app) as a, TestClient(app) as b, TestClient(app) as c:
+        claimed = [x.post("/v1/victim/demo-session").json()["session_id"] for x in (a, b, c)]
+    # Two pooled worlds, then an on-demand world; no session shares a world.
+    assert claimed[:2] == ["judge-00000000000a", "judge-00000000000b"]
+    assert claimed[2] not in claimed[:2] and claimed[2].startswith("judge-")
+    assert not list(ready.iterdir())
+    for sid in claimed:
+        assert DemoWorld(o, sid).path.exists()
+
+
+def test_concurrent_pool_fillers_never_exceed_the_pool_size(tmp_path):
+    import itertools
+    import threading
+
+    from local_services.demo_world import DemoWorld
+
+    app = create_app(settings(tmp_path))
+    o = app.state.orchestrator
+    o.s.practice_pool_size = 2
+    counter = itertools.count()
+    lock = threading.Lock()
+
+    def new_id():
+        with lock:
+            return f"judge-{next(counter):012x}"
+
+    threads = [threading.Thread(target=DemoWorld.fill_pool, args=(o, new_id)) for _ in range(3)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    DemoWorld.fill_pool(o, new_id)  # A later round tops up to, not past, the size.
+    assert len(list((o.s.data_dir / "demo_worlds" / "ready").glob("judge-*"))) == 2

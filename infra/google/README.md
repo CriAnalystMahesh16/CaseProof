@@ -1,14 +1,14 @@
-# Google backend: implementation prepared, deployment held
+# Google runtime infrastructure
 
-Project `caseproof-511713`, Mumbai `asia-south1`. Do not run apply, enable dispatch,
-create DNS, push builds or deploy until frontend/backend acceptance and the user's
-separate deployment instruction. Defaults intentionally fail the deployment gate.
+Project `caseproof-511713`, Mumbai `asia-south1`. Staging is deployed (see
+[deployment record](../../docs/DEPLOYMENT.md)); defaults still fail the deployment gate,
+so applying requires the explicit staging variables.
 
 ## Components
 
 | Selected capability | Implementation |
 | --- | --- |
-| Cloud Run | API, private worker, private simulator, private scanner; frontend image supplied by frontend workstream |
+| Cloud Run | Frontend (nginx, `frontend/Dockerfile` with `FRONTEND_PROFILE=cloud`), API, private worker, private simulator, private scanner |
 | Vertex AI Gemini | Existing ADC transport; structured extraction; shared call limits; deterministic validation |
 | Document AI | Pinned regional processor/version, original line anchors and boxes, confidence downgrade, explicit failures |
 | Cloud Storage | Private quarantine -> clean evidence after matching clean scan; immutable exported packet objects |
@@ -58,7 +58,9 @@ remote Terraform state before any later apply. Do not recreate existing resource
 
 - Cloud staff requests need `Authorization: Bearer <Google ID token>` with the
   configured OAuth client audience and a server-mapped Google subject. Local demo
-  role headers are not cloud authorization. Frontend sign-in wiring remains pending.
+  role headers are not cloud authorization. The cloud frontend build signs staff in
+  with Google Identity Services using `VITE_GOOGLE_CLIENT_ID` (Cloud Build
+  `_STAFF_CLIENT_ID`); real sign-in is unverified until staging.
 - Victims use secure HTTP-only same-site cookies. All browser requests must use the
   same public HTTPS origin; deploy the frontend through the same load balancer.
 - An administrator explicitly invokes `POST /v1/admin/synthetic/preload` once.

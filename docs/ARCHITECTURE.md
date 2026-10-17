@@ -37,21 +37,45 @@ idempotency key. A delivered packet remains open for follow-up.
 
 ## Local packaging
 
-`Dockerfile.app` builds static React assets with pinned Node, then serves them
-from FastAPI. `local_services.application` supervises web, OCR, feed, report
-receiver and worker processes. Internal listeners bind to loopback; only web port
-8080 is published on host loopback. `/ready` checks dependencies and worker health.
-An essential child exit stops the container, and the restart policy recovers it.
-Persistent bank preload is idempotent and creates no complaint.
+`compose.yaml` runs independent services on one user-defined network, `caseproof`.
+Services address each other by Compose DNS name; only `frontend` publishes a port,
+bound to host loopback.
 
-`Dockerfile` and `docker/compose.services.yaml` retain the separate-service testing
-harness. Invoke that configuration with `--project-directory .` so paths resolve
-from the repository root; do not run both packages on the same published port.
+```mermaid
+flowchart LR
+ U[Browser 127.0.0.1:8080] --> FE[frontend: nginx + React build]
+ FE -- /v1, /customer, /ready, /inspector --> API[api: FastAPI]
+ API --> CD[(application-data)]
+ WK[worker] --> CD
+ WK --> OCR[ocr: Tesseract]
+ WK --> SIM[simulator: report receivers]
+ WK --> FEED[trail-feed]
+ API -. readiness .-> OCR & SIM & FEED
+ PRE[preload: one-shot] --> CD
+ SIM --> SD[(simulator-data)]
+ FEED --> FD[(feed-data)]
+```
+
+- `frontend` (`frontend/Dockerfile`) builds the React app with pinned Node and serves
+  it from nginx at `/app/`. Every other path is reverse-proxied to `api:8000`.
+- Backend images come from the multi-target root `Dockerfile`: `service` (API,
+  worker, preload, feed, simulator) and `ocr` (adds Tesseract; Bookworm keeps the
+  frozen local OCR baseline). The default `test` target is the regression image.
+- `api` readiness (`/ready`) requires OCR, feed, simulator and a fresh worker
+  heartbeat; `frontend` starts only after `api` is healthy. `preload` must finish
+  successfully before `api` and `worker` start. Each service restarts independently.
+- `api` and `worker` share the case store (SQLite + DuckDB + objects) on the
+  `application-data` volume, standing in for Firestore/BigQuery/Cloud Storage.
+  The feed and simulator own their data on separate volumes.
+- The worker keeps a small pool of pre-built practice worlds so a new practice
+  session is claimed rather than generated on request (`PRACTICE_POOL_SIZE`).
 
 ## Google target
 
-Use separately deployed services and attached identities for API, worker, scanner
-and simulators. Google mode rejects silent local-storage/OCR/model fallbacks.
+Use separately deployed services and attached identities for frontend, API, worker,
+scanner and simulators. The load balancer routes `/v1/*` and `/health` to the API and
+everything else to the frontend (built with `FRONTEND_PROFILE=cloud`, which proxies
+nothing and only redirects `/customer/{token}` to the React reply route). Google mode rejects silent local-storage/OCR/model fallbacks.
 Cloud Armor protects edge requests; a private malware scanner separately gates
 quarantine promotion. See `infra/google/README.md`. Local packaging changes do
 not authorize Terraform apply, image publication or deployment.

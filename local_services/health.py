@@ -1,14 +1,20 @@
 """Fast Docker worker liveness check; no application/database/model imports."""
 
 import os
+import socket
 import time
 from pathlib import Path
 
 
-def worker_healthy(data_dir, as_of=None):
+def replica_heartbeat(data_dir):
+    """Per-replica heartbeat: scaled workers share /data, so each checks its own."""
+    return Path(data_dir) / f"worker.{socket.gethostname()}.heartbeat"
+
+
+def worker_healthy(data_dir, as_of=None, heartbeat=None):
     try:
         age = (time.time() if as_of is None else as_of) - (
-            Path(data_dir) / "worker.heartbeat"
+            Path(heartbeat) if heartbeat else Path(data_dir) / "worker.heartbeat"
         ).stat().st_mtime
     except OSError:
         return False
@@ -16,4 +22,5 @@ def worker_healthy(data_dir, as_of=None):
 
 
 if __name__ == "__main__":
-    raise SystemExit(0 if worker_healthy(os.environ.get("DATA_DIR", "/data")) else 1)
+    data = os.environ.get("DATA_DIR", "/data")
+    raise SystemExit(0 if worker_healthy(data, heartbeat=replica_heartbeat(data)) else 1)

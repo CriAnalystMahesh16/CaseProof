@@ -346,3 +346,40 @@ def test_new_cloud_complaint_request_reply_approval_and_two_deliveries(tmp_path,
         )
         assert workflow.status_code == 200, workflow.text
         assert workflow.json()["followup"]["state"] == "awaiting_external"
+
+
+def test_practice_personas_are_confined_to_the_callers_own_practice_tenant(tmp_path, monkeypatch):
+    o, tasks, receiver, clean = runtime(tmp_path, monkeypatch)
+    o.s.cloud_practice_personas = True
+    o.store.create("SHARED-CASE", tenant_id="demo", customer_account="shared")
+    with TestClient(create_app(o.s, o), base_url="https://caseproof.test") as visitor:
+        # No practice session cookie: a persona header grants nothing.
+        denied = visitor.get("/v1/workspace?scope=all", headers={"X-Demo-User": "analyst"})
+        assert denied.status_code == 403
+        made = visitor.post("/v1/victim/demo-session")
+        assert made.status_code == 200, made.text
+        tenant = made.json()["session_id"]
+        queue = visitor.get("/v1/workspace?scope=all", headers={"X-Demo-User": "analyst"})
+        assert queue.status_code == 200, queue.text
+        assert all(c["case_id"] != "SHARED-CASE" for c in queue.json()["cases"])
+        # Administrative and unknown personas stay unavailable without sign-in.
+        for persona in ("admin", "superuser"):
+            response = visitor.get("/v1/workspace?scope=all", headers={"X-Demo-User": persona})
+            assert response.status_code == 403
+        assert (
+            visitor.post(
+                "/v1/admin/synthetic/preload", headers={"X-Demo-User": "reviewer"}
+            ).status_code
+            == 403
+        )
+        shared = visitor.get("/v1/cases/SHARED-CASE", headers={"X-Demo-User": "reviewer"})
+        assert shared.status_code in (403, 404)
+        assert tenant.startswith("judge-")
+
+
+def test_practice_session_daily_cap_is_configurable(tmp_path, monkeypatch):
+    o, tasks, receiver, clean = runtime(tmp_path, monkeypatch)
+    o.s.cloud_practice_daily_limit = 2
+    with TestClient(create_app(o.s, o), base_url="https://caseproof.test") as visitor:
+        codes = [visitor.post("/v1/victim/demo-session").status_code for _ in range(3)]
+    assert codes == [200, 200, 429]

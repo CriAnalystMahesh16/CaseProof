@@ -18,6 +18,13 @@ it("demo mode uses only supported identities", () => {
   expect(auth.headers("admin")).toEqual({ "X-Demo-User": "admin" });
   expect(() => auth.headers("invented")).toThrow();
 });
+it("cloud practice access uses labelled personas without a token", () => {
+  const auth = createAuth("cloud", () => 0, "practice");
+  expect(auth.ready()).toBe(true);
+  expect(auth.access).toBe("practice");
+  expect(auth.headers("analyst")).toEqual({ "X-Demo-User": "analyst" });
+  expect(() => auth.headers("invented")).toThrow();
+});
 it("only announces real arrivals after baseline, then workflow changes", () => {
   expect(queueChanges(null, [{ case_id: "A", status: "new" }])).toEqual([]);
   expect(

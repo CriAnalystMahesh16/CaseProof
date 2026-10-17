@@ -81,6 +81,11 @@ variable "staff_principals" {
   type    = map(object({ role = string, tenant_id = string }))
   default = {}
 }
+variable "practice_personas" {
+  description = "Synthetic demo: analyst/reviewer personas confined to each visitor's practice session, instead of Google staff sign-in"
+  type        = bool
+  default     = false
+}
 variable "alert_email" {
   type    = string
   default = ""
@@ -94,8 +99,8 @@ provider "google" {
 resource "terraform_data" "deployment_gate" {
   lifecycle {
     precondition {
-      condition     = var.alert_email != "" && var.deployment_enabled && var.frontend_backend_tests_passed && var.frontend_image != "" && var.processor_version != "" && var.staff_audience != "" && length(var.staff_principals) > 0 && !endswith(var.public_domain, ".invalid") && !startswith(var.application_image, "deployment-held") && !startswith(var.scanner_image, "deployment-held")
-      error_message = "DEPLOYMENT HELD: frontend/backend acceptance, real image digests, processor/version, identity mapping and domain are required. Do not enable without the user's deployment instruction."
+      condition     = var.alert_email != "" && var.deployment_enabled && var.frontend_backend_tests_passed && var.frontend_image != "" && var.processor_version != "" && (var.practice_personas || (var.staff_audience != "" && length(var.staff_principals) > 0)) && !endswith(var.public_domain, ".invalid") && !startswith(var.application_image, "deployment-held") && !startswith(var.scanner_image, "deployment-held")
+      error_message = "DEPLOYMENT HELD: frontend/backend acceptance, real image digests, processor/version, staff identity mapping or practice personas, and domain are required. Do not enable without the user's deployment instruction."
     }
   }
 }

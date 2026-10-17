@@ -1,13 +1,15 @@
-import React from 'react';
-import { createRoot } from 'react-dom/client';
-import './styles.css';
-import './studio.css';
-import App from './LiveApp.jsx';
-import { SessionProvider } from './state/resources.jsx';
+import React from "react";
+import { createRoot } from "react-dom/client";
+import "./styles.css";
+import "./studio.css";
+import App from "./LiveApp.jsx";
+import { SessionProvider } from "./state/resources.jsx";
+import TourOverlay from "./tour/Tour.jsx";
 
-createRoot(document.getElementById('root')).render(
+createRoot(document.getElementById("root")).render(
   <SessionProvider>
-      <App />
+    <App />
+    <TourOverlay />
   </SessionProvider>,
 );
 import "./quality.css";

@@ -7,7 +7,9 @@ from types import SimpleNamespace
 
 from filelock import FileLock
 
+from caseproof.adapters.duckdb_bank import DuckDBBank
 from local_services.bank_network import BankNetwork
+from local_services.leadership import write_atomic
 
 BANKS = [
     "Cedar Demo Bank",
@@ -54,40 +56,43 @@ class DemoWorld:
         with FileLock(str(self.path) + ".lock"):
             if self.path.exists():
                 return json.loads(self.path.read_text())
-            network = BankNetwork(self.o)
             people, ids = [], []
-            for index in range(6):
-                nid = f"CEDAR-{self.namespace}-{index + 1}"
-                # Generate once, remap downstream institutions, then import through the
-                # existing immutable bank contract. No complaint is created here.
-                try:
-                    saved = network.read(nid, ADMIN)
-                except KeyError:
-                    seed = 35 + index
-                    if self.namespace.startswith("SESSION-judge-"):
-                        from caseproof.domain.contracts import hash_json
+            # One bank connection for setup and all six networks: otherwise the shared
+            # bank store is opened and locked about thirty times (B11 latency).
+            with DuckDBBank(self.o.s.duckdb_path).connect():
+                network = BankNetwork(self.o)
+                for index in range(6):
+                    nid = f"CEDAR-{self.namespace}-{index + 1}"
+                    # Generate once, remap downstream institutions, then import through the
+                    # existing immutable bank contract. No complaint is created here.
+                    try:
+                        saved = network.read(nid, ADMIN)
+                    except KeyError:
+                        seed = 35 + index
+                        if self.namespace.startswith("SESSION-judge-"):
+                            from caseproof.domain.contracts import hash_json
 
-                        seed = 100 + int(hash_json([nid, index])[:6], 16) % 9000
-                    saved = network._generate(nid, seed, "demo")
-                    raw = json.dumps(saved)
-                    raw = raw.replace("Lotus Demo Bank", BANKS[1 + index * 2 % 9])
-                    raw = raw.replace("Tulip Demo Bank", BANKS[1 + (index * 2 + 1) % 9])
-                    saved = json.loads(raw)
-                for j, customer in enumerate(saved["dataset"]["customers"]):
-                    customer["display_name"] = NAMES[index * 2 + j] + " (synthetic)"
-                saved["manifest"]["customers"] = saved["dataset"]["customers"]
-                from caseproof.api.bank_contracts import BankBatch
-                from caseproof.domain.contracts import hash_json
+                            seed = 100 + int(hash_json([nid, index])[:6], 16) % 9000
+                        saved = network._generate(nid, seed, "demo")
+                        raw = json.dumps(saved)
+                        raw = raw.replace("Lotus Demo Bank", BANKS[1 + index * 2 % 9])
+                        raw = raw.replace("Tulip Demo Bank", BANKS[1 + (index * 2 + 1) % 9])
+                        saved = json.loads(raw)
+                    for j, customer in enumerate(saved["dataset"]["customers"]):
+                        customer["display_name"] = NAMES[index * 2 + j] + " (synthetic)"
+                    saved["manifest"]["customers"] = saved["dataset"]["customers"]
+                    from caseproof.api.bank_contracts import BankBatch
+                    from caseproof.domain.contracts import hash_json
 
-                network.ingestion.ingest(BankBatch.model_validate(saved["dataset"]), ADMIN)
-                with network.ingestion.bank.connect() as db:
-                    db.execute(
-                        "INSERT OR IGNORE INTO bank_networks VALUES(?,?,?)",
-                        [hash_json(["demo", nid]), "demo", json.dumps(saved)],
-                    )
-                for customer in saved["dataset"]["customers"]:
-                    people.append({**customer, "network_id": nid, "bank": BANKS[0]})
-                ids.append(nid)
+                    network.ingestion.ingest(BankBatch.model_validate(saved["dataset"]), ADMIN)
+                    with network.ingestion.bank.connect() as db:
+                        db.execute(
+                            "INSERT OR IGNORE INTO bank_networks VALUES(?,?,?)",
+                            [hash_json(["demo", nid]), "demo", json.dumps(saved)],
+                        )
+                    for customer in saved["dataset"]["customers"]:
+                        people.append({**customer, "network_id": nid, "bank": BANKS[0]})
+                    ids.append(nid)
             world = {
                 "version": 1,
                 "synthetic": True,
@@ -100,6 +105,36 @@ class DemoWorld:
             temporary.write_text(json.dumps(world))
             temporary.replace(self.path)
             return world
+
+    @staticmethod
+    def claim_ready(o):
+        """Atomically take one pre-built practice world; None when the pool is empty."""
+        ready = o.s.data_dir / "demo_worlds" / "ready"
+        for marker in sorted(ready.glob("judge-*")) if ready.exists() else []:
+            try:
+                marker.unlink()  # Exactly one claimant succeeds.
+            except FileNotFoundError:
+                continue
+            if DemoWorld(o, marker.name).path.exists():
+                return marker.name
+        return None
+
+    @staticmethod
+    def fill_pool(o, new_id):
+        """Build practice worlds ahead of demand. A marker appears only when complete."""
+        from filelock import Timeout
+
+        ready = o.s.data_dir / "demo_worlds" / "ready"
+        ready.mkdir(parents=True, exist_ok=True)
+        # One filler at a time, so concurrent callers never overfill the pool.
+        try:
+            with FileLock(str(ready) + ".fill.lock", timeout=0):
+                while len(list(ready.glob("judge-*"))) < o.s.practice_pool_size:
+                    sid = new_id()
+                    DemoWorld(o, sid).ensure()
+                    (ready / sid).touch()
+        except Timeout:
+            return
 
     def worlds(self):
         active = self.ensure()
@@ -165,7 +200,6 @@ class DemoWorld:
         cursor = self.path.with_name("world_observations.json")
         previous = json.loads(cursor.read_text()) if cursor.exists() else {}
         states = previous.setdefault("networks", {})
-        network = BankNetwork(self.o)
         due = []
         for nid, reported in networks.items():
             state = states.get(nid, {})
@@ -182,6 +216,10 @@ class DemoWorld:
                 or time.time() - attempted >= interval
             ):
                 due.append((needs_coverage, reported if needs_coverage else -attempted, nid))
+        if not due:
+            return
+        # Only open the shared bank store when an observation is actually due.
+        network = BankNetwork(self.o)
         for _, _, nid in sorted(due, reverse=True)[:2]:
             try:
                 observed_at = time.time()
@@ -197,6 +235,4 @@ class DemoWorld:
                     "error": type(error).__name__,
                     "attempt_at": time.time(),
                 }
-            temporary = cursor.with_suffix(".tmp")
-            temporary.write_text(json.dumps(previous))
-            temporary.replace(cursor)
+            write_atomic(cursor, previous)

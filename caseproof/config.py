@@ -53,6 +53,8 @@ class Settings(BaseSettings):
     external_worker: bool = False
     customer_portal: bool = False
     preloaded_demo: bool = False
+    # Practice worlds the local worker keeps pre-built; 0 builds every session on demand.
+    practice_pool_size: int = 3
     public_base_url: str = "http://127.0.0.1:8000"
     job_lease_seconds: int = 90
     firestore_namespace: str = ""
@@ -64,6 +66,10 @@ class Settings(BaseSettings):
     cloud_scheduler_account: str = ""
     cloud_staff_audience: str = ""
     cloud_staff_principals: dict[str, dict[str, str]] = Field(default_factory=dict)
+    # Synthetic demo only: analyst/reviewer personas without sign-in, confined to the
+    # caller's own practice-session tenant. Never the shared or a configured tenant.
+    cloud_practice_personas: bool = False
+    cloud_practice_daily_limit: int = Field(default=50, ge=1, le=200)
     cloud_simulator_url: str = ""
     cloud_scanner_url: str = ""
     gcs_quarantine_bucket: str = ""

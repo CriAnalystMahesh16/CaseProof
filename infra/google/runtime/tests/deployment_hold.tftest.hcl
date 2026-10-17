@@ -8,6 +8,11 @@ override_resource {
   values = { id = "projects/caseproof-511713/locations/asia-south1/queues/caseproof-processing" }
 }
 
+override_resource {
+  target = google_compute_global_address.edge
+  values = { id = "projects/caseproof-511713/global/addresses/caseproof-edge", address = "192.0.2.10" }
+}
+
 run "default_configuration_cannot_deploy" {
   command         = plan
   expect_failures = [terraform_data.deployment_gate]
@@ -51,5 +56,29 @@ run "reviewable_plan_keeps_dispatch_paused" {
   assert {
     condition     = !google_compute_backend_service.api.log_config[0].enable
     error_message = "Raw load-balancer request URLs must not retain customer bearer tokens."
+  }
+}
+
+run "practice_personas_replace_staff_identity_for_the_synthetic_demo" {
+  command = plan
+  variables {
+    deployment_enabled            = true
+    frontend_backend_tests_passed = true
+    practice_personas             = true
+    application_image             = "asia-south1-docker.pkg.dev/example-project/caseproof/backend@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    scanner_image                 = "asia-south1-docker.pkg.dev/example-project/caseproof/scanner@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    frontend_image                = "asia-south1-docker.pkg.dev/example-project/caseproof/frontend@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    processor_id                  = "offline-processor"
+    processor_version             = "offline-version"
+    alert_email                   = "operator@example.invalid"
+    public_domain                 = "demo.example.com"
+  }
+  assert {
+    condition     = google_cloud_run_v2_service.backend["api"].ingress == "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
+    error_message = "The API must only be reachable through the load balancer."
+  }
+  assert {
+    condition     = google_cloud_tasks_queue.processing.desired_state == "PAUSED"
+    error_message = "Dispatch stays paused until explicitly enabled."
   }
 }

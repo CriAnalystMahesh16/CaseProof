@@ -13,6 +13,7 @@ from caseproof.cloud.observability import install
 from caseproof.cloud.runtime import process_job
 from caseproof.domain.actions import bank_unavailable, correct, request_state
 from caseproof.domain.brief import build_brief
+from caseproof.domain.contracts import Actor
 from caseproof.domain.evidence import diff
 from caseproof.domain.review import approve
 from caseproof.pipeline.orchestrator import Orchestrator
@@ -167,13 +168,28 @@ def create_app(settings, orchestrator=None, *, worker=False):
 
         return app
 
-    def identity(request: Request, authorization: str | None = Header(default=None)):
+    def identity(
+        request: Request,
+        authorization: str | None = Header(default=None),
+        x_demo_user: str | None = Header(default=None),
+    ):
+        if not authorization and settings.cloud_practice_personas and settings.demo_mode:
+            return practice_persona(request, x_demo_user)
         actor = staff(settings, authorization)
         if request.cookies.get("cp_demo") and actor.tenant_id == "demo":
             actor = actor.model_copy(
                 update={"tenant_id": app.state.cloud_catalogue(request)["tenant"]}
             )
         return actor
+
+    def practice_persona(request, persona):
+        """Labelled synthetic persona, scoped to the caller's own practice tenant only."""
+        if persona not in {"analyst", "reviewer"} or not request.cookies.get("cp_demo"):
+            raise PermissionError("authenticated_identity_required")
+        tenant = app.state.cloud_catalogue(request)["tenant"]
+        if not tenant.startswith("judge-"):
+            raise PermissionError("practice_session_required")
+        return Actor(user_id="practice-" + persona, role=persona, tenant_id=tenant)
 
     def authorised(cid, actor):
         if o.store.metadata(cid)["tenant_id"] != actor.tenant_id:

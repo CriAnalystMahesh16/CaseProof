@@ -141,8 +141,14 @@ class Provider:
                     response_json_schema=schema,
                     temperature=0,
                     max_output_tokens=self.s.llm_max_output_tokens,
+                    # Schema-bound extraction needs no reasoning budget; thinking tokens
+                    # otherwise share max_output_tokens and truncate the JSON.
+                    thinking_config=types.ThinkingConfig(thinking_budget=0),
                 ),
             )
+            reason = getattr(getattr(r, "candidates", [None])[0], "finish_reason", None)
+            if str(getattr(reason, "name", reason) or "").upper() == "MAX_TOKENS":
+                raise ProviderError("LLM_OUTPUT_TRUNCATED")
             return json.loads(r.text), r.usage_metadata
 
         try:
@@ -169,7 +175,8 @@ class Provider:
                             "retry_at": (
                                 datetime.now(timezone.utc)
                                 + timedelta(
-                                    seconds=300 if code == 429 else 60 if code == 503 else 86400
+                                    # Shared-capacity 429s clear quickly; retry soon.
+                                    seconds=60 if code in (429, 503) else 86400
                                 )
                             ).isoformat(),
                         }
@@ -270,20 +277,37 @@ class Provider:
             return self.local.extract_claims(case_id, revision, segments)
         if self.mode == "mock":
             return self.mock.extract_claims(case_id, revision, segments)
+        # Models abbreviate long segment IDs (seg-ART-0 for seg-ART-1066ea88ab1b-0).
+        # Cite short aliases instead and map them back here; anything unmappable
+        # stays unknown and is still rejected by citation validation.
+        aliases = {f"S{i + 1}": seg.segment_id for i, seg in enumerate(segments)}
+        alias_of = {real: alias for alias, real in aliases.items()}
         try:
             r = self.generate(
                 case_id,
                 "extract",
                 {
-                    "segments": [s.model_dump() for s in segments],
+                    "segments": [
+                        {**seg.model_dump(), "segment_id": alias_of[seg.segment_id]}
+                        for seg in segments
+                    ],
                     "corrective_action": corrective_action,
                 },
                 EXTRACT_SCHEMA,
             )
+            claims = [
+                {
+                    **c,
+                    "anchor_segment_ids": [
+                        aliases.get(anchor, anchor) for anchor in c.get("anchor_segment_ids", [])
+                    ],
+                }
+                for c in r["data"]["claims"]
+            ]
             return ExtractionResult(
                 case_id=case_id,
                 source_revision=revision,
-                claims=[CandidateClaim(**c) for c in r["data"]["claims"]],
+                claims=[CandidateClaim(**c) for c in claims],
                 unresolved_fields=r["data"]["unresolved_fields"],
                 run=RunMeta(**r["run"]),
             )

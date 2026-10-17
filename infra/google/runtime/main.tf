@@ -22,8 +22,10 @@ locals {
     CLOUD_SCHEDULER_ACCOUNT      = google_service_account.scheduler.email,
     CLOUD_STAFF_AUDIENCE         = var.staff_audience,
     CLOUD_STAFF_PRINCIPALS       = jsonencode(var.staff_principals),
+    CLOUD_PRACTICE_PERSONAS      = tostring(var.practice_personas),
+    CLOUD_PRACTICE_DAILY_LIMIT   = "50",
     PUBLIC_BASE_URL              = "https://${var.public_domain}",
-    LLM_MAX_CALLS_PER_CASE       = "8", LLM_DAILY_CALL_CAP = "20", LLM_MAX_OUTPUT_TOKENS = "4096",
+    LLM_MAX_CALLS_PER_CASE       = "8", LLM_DAILY_CALL_CAP = "300", LLM_MAX_OUTPUT_TOKENS = "4096",
     JOB_LEASE_SECONDS            = "90"
   }
 }
@@ -161,8 +163,9 @@ resource "google_cloud_run_v2_service" "scanner" {
   ingress             = "INGRESS_TRAFFIC_ALL"
   deletion_protection = true
   template {
-    service_account                  = google_service_account.runtime["scanner"].email
-    max_instance_request_concurrency = 1
+    service_account = google_service_account.runtime["scanner"].email
+    # One resident clamd engine serves up to its four scan threads.
+    max_instance_request_concurrency = 4
     timeout                          = "160s"
     scaling {
       min_instance_count = 0
@@ -171,9 +174,11 @@ resource "google_cloud_run_v2_service" "scanner" {
     containers {
       image = var.scanner_image
       resources {
-        limits   = { cpu = "1", memory = "2Gi" }
-        cpu_idle = true
+        limits            = { cpu = "1", memory = "2Gi" }
+        cpu_idle          = true
+        startup_cpu_boost = true
       }
+      # Signature refresh (<=60s) plus one-time engine load (32-55s measured at 1 CPU).
       startup_probe {
         initial_delay_seconds = 10
         period_seconds        = 10
@@ -227,10 +232,11 @@ resource "google_cloud_tasks_queue" "processing" {
     max_concurrent_dispatches = 1
   }
   retry_config {
-    max_attempts       = 3
-    min_backoff        = "10s"
-    max_backoff        = "60s"
-    max_retry_duration = "600s"
+    # Six attempts over ~12 minutes: outlasts transient Vertex 429s (MAX_JOB_ATTEMPTS).
+    max_attempts       = 6
+    min_backoff        = "20s"
+    max_backoff        = "300s"
+    max_retry_duration = "1800s"
   }
   stackdriver_logging_config { sampling_ratio = 1 }
   lifecycle { prevent_destroy = true }

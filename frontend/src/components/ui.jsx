@@ -17,9 +17,19 @@ export const Card = ({ className, children, ...p }) => (
   </div>
 );
 
-export function CardH({ title, sub, children, icon }) {
+// Guided-tour anchor: an explicit `tour` id, else a slug of a plain-text title.
+const tourId = (title, tour) =>
+  tour ||
+  (typeof title === "string"
+    ? title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "")
+    : undefined);
+
+export function CardH({ title, sub, children, icon, tour }) {
   return (
-    <div className="card-h">
+    <div className="card-h" data-tour={tourId(title, tour)}>
       {icon}
       <div className="col">
         <h3>{title}</h3>

@@ -1,7 +1,8 @@
 # Google deployment readiness
 
-**Deployment is on hold.** Local integration or GitHub publication does not
-permit Terraform apply, image publication, DNS changes or enabling dispatch.
+**Staging is deployed** (17 October 2026, at the project owner's instruction):
+https://8-233-217-230.sslip.io. See the [deployment record](DEPLOYMENT.md) and
+[staging validation](INTEGRATION_RESULTS.md). Production use remains out of scope.
 
 Prepared components: Cloud Run, Vertex AI Gemini, Document AI, Cloud Storage,
 Firestore Native, BigQuery, Cloud Tasks, Cloud Scheduler, Artifact Registry, IAM,
@@ -11,8 +12,11 @@ avoids service-account key files. Keep hosted simulators explicitly synthetic.
 
 Before an authorized staging deployment:
 
-1. Complete integrated frontend authentication and asynchronous workflow acceptance.
-2. Establish scanner latency margin and assess remaining native dependency risks.
+1. Done locally: separate frontend service (cloud build profile with Google staff
+   sign-in), asynchronous workflow acceptance, scanner latency margin (resident
+   engine) and native dependency triage ([assessment](NATIVE_DEPENDENCY_RISK.md)).
+   Staff sign-in itself is unverified until staging.
+2. Re-scan the exact staged image digests for new native findings.
 3. Confirm Mumbai processor/version, model availability and quotas; configure staff
    subjects/OAuth audience, real HTTPS domain and operational alert destination.
 4. Review protected Terraform state ownership/imports and immutable image digests.
@@ -28,4 +32,5 @@ Evaluate retained unfamiliar inputs, including unresolved N28, before quality cl
 FCA independent evaluation remains deferred until Google integration as agreed.
 
 Local synthetic success is not production readiness or evidence of customer demand.
-See [infrastructure configuration](../infra/google/README.md).
+See [deployment preparation](DEPLOYMENT.md) and
+[infrastructure configuration](../infra/google/README.md).

@@ -58,24 +58,27 @@ def ocr_batch(data, size, url):
         return list(pool.map(one, range(size)))
 
 
-def prepare_clients(base):
+def prepare_clients(base, sessions=1, needed=5):
     clients = []
-    setup = httpx.Client(base_url=base, timeout=180, trust_env=False)
-    checked(setup.post("/v1/victim/demo-session"))
-    customers = checked(setup.get("/v1/victim/demo-customers"))["customers"]
-    for customer in customers:
-        client = httpx.Client(base_url=base, timeout=120, trust_env=False, cookies=setup.cookies)
-        checked(client.post("/v1/victim/sessions", json={"customer_id": customer["account"]}))
-        me = checked(client.get("/v1/victim/me"))
-        tx = next((t for t in me["transactions"] if t["txn_id"].endswith("-T1")), None)
-        if tx:
-            response = client.get("/v1/victim/receipts/" + tx["txn_id"])
-            response.raise_for_status()
-            clients.append((client, tx, response.content))
-        else:
-            client.close()
-    setup.close()
-    assert len(clients) >= 5
+    for _ in range(sessions):
+        setup = httpx.Client(base_url=base, timeout=180, trust_env=False)
+        checked(setup.post("/v1/victim/demo-session"))
+        customers = checked(setup.get("/v1/victim/demo-customers"))["customers"]
+        for customer in customers:
+            client = httpx.Client(
+                base_url=base, timeout=120, trust_env=False, cookies=setup.cookies
+            )
+            checked(client.post("/v1/victim/sessions", json={"customer_id": customer["account"]}))
+            me = checked(client.get("/v1/victim/me"))
+            tx = next((t for t in me["transactions"] if t["txn_id"].endswith("-T1")), None)
+            if tx:
+                response = client.get("/v1/victim/receipts/" + tx["txn_id"])
+                response.raise_for_status()
+                clients.append((client, tx, response.content))
+            else:
+                client.close()
+        setup.close()
+    assert len(clients) >= needed
     return clients
 
 
@@ -217,18 +220,21 @@ def complaint_batch(clients, size):
         return list(pool.map(one, range(size)))
 
 
-def run(folder, output, phase):
+def run(folder, output, phase, sizes=(1, 3, 5), repetitions=3, sessions=1):
     corpus = load_frozen(folder)
     output.mkdir(parents=True, exist_ok=False)
     asset = corpus["cases"][0]["assets"][0]
     data = (folder / asset["path"]).read_bytes()
     clients = (
-        prepare_clients(os.environ.get("API_BASE_URL", "http://gateway")) if phase == "http" else []
+        prepare_clients(os.environ.get("API_BASE_URL", "http://gateway"), sessions, max(sizes))
+        if phase == "http"
+        else []
     )
     batches = []
+    run_started = time.perf_counter()
     try:
-        for size in (1, 3, 5):
-            for repetition in range(3):
+        for size in sizes:
+            for repetition in range(repetitions):
                 rows = (
                     complaint_batch(clients, size)
                     if phase == "http"
@@ -263,7 +269,10 @@ def run(folder, output, phase):
         "small_sample_tail_not_production_percentile": True,
         "corpus_sha256": (folder / "SHA256").read_text(),
         "batches": batches,
-        "passed": len(batches) == 9 and all(b["passed"] for b in batches),
+        "sizes": list(sizes),
+        "repetitions": repetitions,
+        "wall_seconds": round(time.perf_counter() - run_started, 1),
+        "passed": len(batches) == len(sizes) * repetitions and all(b["passed"] for b in batches),
         "total_requests": sum(len(b["rows"]) for b in batches),
         "errors": sum(not r["passed"] for b in batches for r in b["rows"]),
     }
@@ -276,6 +285,10 @@ if __name__ == "__main__":
     parser.add_argument("phase", choices=["ocr", "http"])
     parser.add_argument("--corpus", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--sizes", default="1,3,5", help="comma-separated batch sizes")
+    parser.add_argument("--repetitions", type=int, default=3)
+    parser.add_argument("--sessions", type=int, default=1, help="practice sessions for clients")
     args = parser.parse_args()
-    result = run(args.corpus, args.output, args.phase)
+    sizes = tuple(int(x) for x in args.sizes.split(","))
+    result = run(args.corpus, args.output, args.phase, sizes, args.repetitions, args.sessions)
     raise SystemExit(0 if result["passed"] else 1)

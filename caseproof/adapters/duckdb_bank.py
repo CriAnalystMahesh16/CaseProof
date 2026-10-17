@@ -1,8 +1,19 @@
+import importlib.util
+import sys
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 
 import duckdb
 from filelock import FileLock
+
+# DuckDB probes for pandas on every parameterised execute. It is not a dependency,
+# and each failed probe walks the whole import path (~2,400 probes and ~12,000
+# filesystem stats per practice world). Record the absence once.
+if importlib.util.find_spec("pandas") is None:
+    sys.modules.setdefault("pandas", None)
+
+_held = threading.local()
 
 
 class DuckDBBank:
@@ -12,10 +23,25 @@ class DuckDBBank:
 
     @contextmanager
     def connect(self):
-        # DuckDB has one writer process. Serialize short connections across API/worker containers.
-        with FileLock(str(self.path) + ".lock", timeout=60):
+        # DuckDB has one writer process. Serialize short connections across API/worker
+        # containers. Nested use on the same thread reuses the held connection: each
+        # open costs a cross-process lock plus ~30ms of engine start-up, so a batch of
+        # related operations (practice world creation) holds one connection instead.
+        # Callers still own their own begin/commit; transactions must not nest.
+        held = getattr(_held, "connections", None)
+        if held is None:
+            held = _held.connections = {}
+        key = str(self.path)
+        if key in held:
+            yield held[key]
+            return
+        with FileLock(key + ".lock", timeout=60):
             with duckdb.connect(self.path) as connection:
-                yield connection
+                held[key] = connection
+                try:
+                    yield connection
+                finally:
+                    del held[key]
 
     def initialise(self):
         with self.connect() as db:

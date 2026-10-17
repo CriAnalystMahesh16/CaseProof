@@ -30,7 +30,9 @@ def reconcile(o):
                 )
                 if not (expired or lost):
                     return
-                if latest["attempt_count"] >= 3 or intent["generation"] >= 3:
+                from caseproof.cloud.runtime import MAX_JOB_ATTEMPTS
+
+                if latest["attempt_count"] >= MAX_JOB_ATTEMPTS or intent["generation"] >= 3:
                     latest.update(status="failed", error="CLOUD_RETRY_BUDGET_EXHAUSTED")
                 else:
                     latest.update(status="queued", lease_until=0, lease_token=None)

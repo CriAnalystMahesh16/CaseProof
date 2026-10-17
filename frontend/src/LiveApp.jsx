@@ -14,6 +14,7 @@ import {
   Activity,
   Check,
   X,
+  Compass,
 } from "lucide-react";
 import {
   useSession,
@@ -40,6 +41,8 @@ import { auth } from "./api/auth.js";
 import { queueChanges } from "./models/queue.js";
 import StaffSignIn from "./components/StaffSignIn.jsx";
 import Victim from "./pages/victim/Victim.jsx";
+import { TourButton } from "./tour/Tour.jsx";
+import { tour } from "./tour/store.js";
 
 export default function App() {
   const route = useRoute(),
@@ -59,8 +62,7 @@ export default function App() {
   if (!session.config) return <Loading />;
   if (route.startsWith("/victim/")) return <Victim route={route} />;
   if (route === "/entry") return <Entry />;
-  if (auth.profile === "cloud" && !auth.ready())
-    return <StaffSignIn onReady={ready} />;
+  if (!auth.ready()) return <StaffSignIn onReady={ready} />;
   return <Staff route={route} />;
 }
 function Entry() {
@@ -84,6 +86,17 @@ function Entry() {
           Report what happened. Understand the evidence. Give the fraud desk a
           clear, accountable path forward.
         </p>
+        <div className="entry-tour">
+          <button
+            className="btn primary lg tour-launch"
+            onClick={() => tour.start(0)}
+          >
+            <Compass size={16} /> Take the guided tour
+          </button>
+          <span className="muted">
+            About six minutes · one golden-hour scam, from report to handoff
+          </span>
+        </div>
         <div className="entry-options">
           <button className="entry-option" onClick={() => go("/victim/start")}>
             <span className="entry-icon">
@@ -227,7 +240,8 @@ function Staff({ route }) {
             <span>Fraud response workspace</span>
           </div>
           <span className="demo-chip">Synthetic data · sandbox</span>
-          <div className="notification-wrap">
+          <TourButton />
+          <div className="notification-wrap" data-tour="notifications">
             <button
               className="icon-btn notification-bell"
               aria-label={`Notifications, ${alerts.filter((a) => !a.seen).length} unread`}
@@ -286,8 +300,8 @@ function Staff({ route }) {
               </div>
             )}
           </div>
-          {auth.profile === "local" ? (
-            <label className="persona-label">
+          {auth.personas ? (
+            <label className="persona-label" data-tour="persona">
               Demo identity
               <select
                 aria-label="Staff persona"
@@ -310,11 +324,7 @@ function Staff({ route }) {
             </button>
           )}
           <span className="avatar">
-            {auth.profile === "cloud"
-              ? "ST"
-              : persona === "reviewer"
-                ? "RV"
-                : "AN"}
+            {!auth.personas ? "ST" : persona === "reviewer" ? "RV" : "AN"}
           </span>
         </header>
         <main className="content" id="content">
@@ -384,7 +394,7 @@ function Case({ caseId, tab }) {
         )
       ) : (
         <>
-          <div className="case-h">
+          <div className="case-h" data-tour="case-header">
             <span className="avatar lg">CP</span>
             <div className="col gap6 grow">
               <div className="mono muted">Cases / {caseId}</div>
@@ -401,7 +411,7 @@ function Case({ caseId, tab }) {
                 {view.identity.revision}
               </div>
             </div>
-            <div className="stats">
+            <div className="stats" data-tour="case-stats">
               <div className="stat">
                 <small>Confirmed disputed</small>
                 <b className="num">{formatMinor(view.amounts.confirmed)}</b>
@@ -419,7 +429,7 @@ function Case({ caseId, tab }) {
               </div>
             </div>
           </div>
-          <nav className="tabs">
+          <nav className="tabs" data-tour="case-tabs">
             {tabs.map(([id, name]) => (
               <button
                 key={id}

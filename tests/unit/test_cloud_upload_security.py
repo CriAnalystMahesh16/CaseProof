@@ -49,18 +49,32 @@ def test_quarantined_upload_cannot_be_read_before_a_digest_bound_clean_scan(tmp_
             storage.read(key)
 
 
-@pytest.mark.parametrize("code, expected", [(0, "clean"), (1, "infected"), (2, None)])
-def test_scanner_errors_are_never_clean(monkeypatch, code, expected):
+@pytest.mark.parametrize(
+    "reply, expected",
+    [
+        ("stream: OK", "clean"),
+        ("stream: Eicar-Signature FOUND", "infected"),
+        ("INSTREAM size limit exceeded. ERROR", None),
+        ("", None),
+    ],
+)
+def test_scanner_errors_are_never_clean(monkeypatch, reply, expected):
     monkeypatch.setattr(cloud_scanner, "signatures", lambda: time.time())
     monkeypatch.setattr(cloud_scanner, "verify_engine", lambda: "1.4.6")
-    monkeypatch.setattr(
-        cloud_scanner.subprocess, "run", lambda *a, **kw: SimpleNamespace(returncode=code)
-    )
+    monkeypatch.setattr(cloud_scanner, "daemon_command", lambda *a, **kw: reply)
     if expected:
         assert cloud_scanner.scan_bytes(b"safe test text", "text/plain")["status"] == expected
     else:
         with pytest.raises(RuntimeError, match="UNAVAILABLE"):
             cloud_scanner.scan_bytes(b"test text", "text/plain")
+
+
+def test_unreachable_resident_engine_is_unavailable_not_clean(monkeypatch, tmp_path):
+    monkeypatch.setenv("CLAMD_SOCKET", str(tmp_path / "missing.sock"))
+    monkeypatch.setattr(cloud_scanner, "signatures", lambda: time.time())
+    monkeypatch.setattr(cloud_scanner, "verify_engine", lambda: "1.4.6")
+    with pytest.raises(RuntimeError, match="DAEMON_UNAVAILABLE"):
+        cloud_scanner.scan_bytes(b"safe test text", "text/plain")
 
 
 @pytest.mark.parametrize("has_old_database", [False, True])
@@ -120,21 +134,18 @@ def test_missing_engine_is_an_explicit_unavailable_state(monkeypatch):
 
 
 def test_scanner_uses_the_same_database_directory_as_its_freshness_gate(tmp_path, monkeypatch):
-    calls = []
     monkeypatch.setenv("CLAMAV_DATABASE", str(tmp_path))
-    monkeypatch.setattr(cloud_scanner, "verify_engine", lambda: "1.4.6")
-    monkeypatch.setattr(cloud_scanner, "signatures", lambda: time.time())
-    monkeypatch.setattr(
-        cloud_scanner.subprocess,
-        "run",
-        lambda command, **kw: calls.append(command) or SimpleNamespace(returncode=0),
-    )
-    cloud_scanner.scan_bytes(b"safe synthetic evidence", "text/plain")
-    assert "--database=" + str(tmp_path) in calls[0]
+    config = cloud_scanner.clamd_config().splitlines()
+    assert "DatabaseDirectory " + str(tmp_path) in config
+    # Reloads must not hold two signature sets in the 2 GiB scanner instance.
+    assert "ConcurrentDatabaseReload no" in config
+    for parser in ("Archive", "PE", "ELF", "OLE2", "PDF", "HTML", "Mail"):
+        assert f"Scan{parser} no" in config
 
 
-def test_stale_signatures_refresh_then_require_a_new_scan_attempt(monkeypatch):
+def test_stale_signatures_refresh_reload_the_engine_then_require_a_new_scan(monkeypatch):
     calls = []
+    commands = []
     state = {"fresh": False}
 
     def signatures():
@@ -149,11 +160,37 @@ def test_stale_signatures_refresh_then_require_a_new_scan_attempt(monkeypatch):
 
     monkeypatch.setattr(cloud_scanner, "signatures", signatures)
     monkeypatch.setattr(cloud_scanner.subprocess, "run", update)
+    monkeypatch.setattr(
+        cloud_scanner,
+        "daemon_command",
+        lambda command, **kw: commands.append(command) or "RELOADING",
+    )
     monkeypatch.setattr(cloud_scanner, "_last_refresh", None, raising=False)
     with pytest.raises(RuntimeError, match="REFRESHED_RETRY"):
         cloud_scanner.current_signatures()
     assert cloud_scanner.current_signatures() == 123
     assert len(calls) == 1 and calls[0][0] == "freshclam"
+    assert commands == [b"RELOAD"]
+
+
+def test_refresh_without_engine_reload_is_unavailable(monkeypatch):
+    state = {"fresh": False}
+
+    def signatures():
+        if not state["fresh"]:
+            raise RuntimeError("SCANNER_SIGNATURES_STALE")
+        return 123
+
+    def update(*args, **kwargs):
+        state["fresh"] = True
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(cloud_scanner, "signatures", signatures)
+    monkeypatch.setattr(cloud_scanner.subprocess, "run", update)
+    monkeypatch.setattr(cloud_scanner, "daemon_command", lambda *a, **kw: "")
+    monkeypatch.setattr(cloud_scanner, "_last_refresh", None, raising=False)
+    with pytest.raises(RuntimeError, match="RELOAD_UNAVAILABLE"):
+        cloud_scanner.current_signatures()
 
 
 def test_failed_signature_refresh_is_throttled_and_never_clean(monkeypatch):

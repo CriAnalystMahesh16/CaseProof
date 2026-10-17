@@ -33,6 +33,7 @@ import {
   clearJournal,
   submitReport,
 } from "../../features/victim/submission.js";
+import { TourButton } from "../../tour/Tour.jsx";
 
 export default function Victim({ route }) {
   const parts = route.split("/");
@@ -48,7 +49,10 @@ export default function Victim({ route }) {
             <small>Cedar Demo Bank · reporting portal</small>
           </div>
         </button>
-        <Badge tone="warn">Synthetic demonstration</Badge>
+        <div className="row gap8">
+          <TourButton />
+          <Badge tone="warn">Synthetic demonstration</Badge>
+        </div>
       </header>
       <div className="victim-layout">
         <aside className="victim-guide">
@@ -151,6 +155,7 @@ function Start() {
           )}
           <button
             className="btn primary lg full"
+            data-tour="continue-customer"
             disabled={!selected || action.busy}
             onClick={() =>
               action
@@ -181,6 +186,7 @@ function Start() {
             </button>
             <button
               className="btn ghost"
+              data-tour="practice-session"
               disabled={action.busy}
               onClick={() =>
                 action
@@ -238,7 +244,11 @@ function Home() {
         </p>
       </div>
       <div className="row gap8 wrap victim-actions">
-        <button className="btn primary lg" onClick={() => go("/victim/report")}>
+        <button
+          className="btn primary lg"
+          data-tour="report-scam"
+          onClick={() => go("/victim/report")}
+        >
           <Plus size={15} />
           Report a payment scam
         </button>
@@ -434,7 +444,9 @@ function Report() {
           )}
           {step === 0 && (
             <>
-              <h2>Which payments do you want to dispute?</h2>
+              <h2 data-tour="report-payments">
+                Which payments do you want to dispute?
+              </h2>
               <p className="muted">
                 Choose only payments that belong in this report. A candidate is
                 not automatically disputed.
@@ -469,7 +481,7 @@ function Report() {
           )}
           {step === 1 && (
             <>
-              <h2>Your account of the incident</h2>
+              <h2 data-tour="report-narrative">Your account of the incident</h2>
               <label>
                 What happened?
                 <textarea
@@ -524,7 +536,7 @@ function Report() {
           )}
           {step === 2 && (
             <>
-              <h2>Share relevant evidence</h2>
+              <h2 data-tour="report-evidence">Share relevant evidence</h2>
               <p className="muted">
                 Optional · PNG, JPEG or UTF-8 text · 5 MiB per file. Up to 5
                 initial attachments; narrative uses the sixth slot. Total case
@@ -569,7 +581,7 @@ function Report() {
           )}
           {step === 3 && (
             <>
-              <h2>Review your report</h2>
+              <h2 data-tour="report-review">Review your report</h2>
               <div className="bound">
                 <p>
                   <b>{me.data.customer.display_name}</b> ·{" "}
@@ -687,7 +699,9 @@ function Complaint({ caseId }) {
       </button>
       <div className="victim-title">
         <div className="eyebrow">Your report reference</div>
-        <h1 className="case-reference">{caseId}</h1>
+        <h1 className="case-reference" data-tour="complaint-reference">
+          {caseId}
+        </h1>
         <p>
           Your report and received evidence are preserved while the fraud desk
           assesses them.

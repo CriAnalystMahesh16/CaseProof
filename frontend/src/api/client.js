@@ -16,7 +16,9 @@ export class ApiError extends Error {
           ? "This item is unavailable."
           : status === 409
             ? "The case changed. Reload the current assessment before trying again."
-            : code,
+            : code === "bank_data_preparing"
+              ? "Your practice bank is still being prepared. Try again in a moment."
+              : code,
     );
     Object.assign(this, {
       status,
@@ -26,6 +28,15 @@ export class ApiError extends Error {
     });
   }
 }
+const PREPARING_LIMIT_MS = 120000;
+const pause = (ms, signal) =>
+  new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener("abort", () => {
+      clearTimeout(timer);
+      reject(signal.reason);
+    });
+  });
 export async function apiRequest(
   path,
   { method = "GET", body, persona, signal, fetcher = fetch, raw = false } = {},
@@ -35,16 +46,34 @@ export async function apiRequest(
     ...auth.headers(persona),
     ...(body && !form ? { "Content-Type": "application/json" } : {}),
   };
-  const response = await fetcher(path, {
-    method,
-    body: body ? (form ? body : JSON.stringify(body)) : undefined,
-    headers,
-    signal,
-    credentials: "include",
-    cache: "no-store",
-  });
+  const send = () =>
+    fetcher(path, {
+      method,
+      body: body ? (form ? body : JSON.stringify(body)) : undefined,
+      headers,
+      signal,
+      credentials: "include",
+      cache: "no-store",
+    });
+  let response = await send();
+  // A new practice session's bank records publish asynchronously; reads answer
+  // 503 bank_data_preparing with Retry-After until they are ready.
+  for (let waited = 0; method === "GET" && waited < PREPARING_LIMIT_MS; ) {
+    if (response.status !== 503) break;
+    const detail = await response
+      .clone()
+      .json()
+      .then((data) => data.detail)
+      .catch(() => null);
+    if (detail !== "bank_data_preparing") break;
+    const delay =
+      Math.min(Number(response.headers.get("Retry-After")) || 3, 10) * 1000;
+    await pause(delay, signal);
+    waited += delay;
+    response = await send();
+  }
   if (!response.ok) {
-    if (response.status === 401 && auth.profile === "cloud") auth.clear();
+    if (response.status === 401 && !auth.personas) auth.clear();
     let data;
     try {
       data = await response.json();

@@ -37,6 +37,11 @@ def configure(o):
     o.fixtures = {}
 
 
+# Matches the Cloud Tasks queue retry budget (infra/google/runtime/main.tf). Wide
+# enough to outlast transient Vertex 429 capacity limits and the provider circuit.
+MAX_JOB_ATTEMPTS = 6
+
+
 def process_job(o, jid):
     job = o.jobs.claim(jid)
     if job is None:
@@ -68,7 +73,7 @@ def process_job(o, jid):
         o.jobs.defer(job, "EVIDENCE_SCAN_PENDING_OR_REJECTED")
         raise
     except Exception:
-        if job["attempt_count"] < 3:
+        if job["attempt_count"] < MAX_JOB_ATTEMPTS:
             o.jobs.defer(job, "CLOUD_PROCESSING_RETRY")
         else:
             o.jobs.finish(jid, "failed", "CLOUD_PROCESSING_FAILED", job["lease_token"])

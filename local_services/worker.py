@@ -13,6 +13,7 @@ from caseproof.domain.clock import current_clock, urgency
 from caseproof.domain.contracts import hash_json, now
 from caseproof.pipeline.orchestrator import Orchestrator
 from caseproof.worker import run_one
+from local_services.leadership import BackgroundLease, write_atomic
 
 
 def poll_clocks(orchestrator):
@@ -127,9 +128,7 @@ def poll_feed(orchestrator):
                         latest = orchestrator.store.get(snapshot.case_id)
                         orchestrator.jobs.enqueue(latest.case_id, latest.revision)
     if previous_hash != digest or not isinstance(previous, dict):
-        temporary = cursor.with_suffix(".tmp")
-        temporary.write_text(json.dumps({"hash": digest, "ids": [r["update_id"] for r in rows]}))
-        temporary.replace(cursor)
+        write_atomic(cursor, {"hash": digest, "ids": [r["update_id"] for r in rows]})
 
 
 def main():
@@ -143,9 +142,15 @@ def main():
         )
     settings.data_dir.mkdir(parents=True, exist_ok=True)
 
+    from local_services.health import replica_heartbeat
+
+    # Shared heartbeat for API readiness (any live worker); per-replica for its healthcheck.
+    own = replica_heartbeat(settings.data_dir)
+
     def pulse():
         while True:
             heartbeat.touch()
+            own.touch()
             time.sleep(3)
 
     threading.Thread(target=pulse, daemon=True).start()
@@ -168,24 +173,53 @@ def poll_background(orchestrator, stopped):
 
             DemoWorld(orchestrator).tick()
 
+    # Constructing ingestion runs schema setup under the shared bank-store lock;
+    # build it once rather than every three seconds (it blocked practice sessions).
+    ingestion = []
+
+    def bank_wakeups():
+        if not ingestion:
+            ingestion.append(BankIngestion(orchestrator))
+        ingestion[0].recover_wakeups()
+
+    def practice_pool():
+        if settings.preloaded_demo and settings.customer_portal:
+            import uuid
+
+            from local_services.demo_world import DemoWorld
+
+            DemoWorld.fill_pool(orchestrator, lambda: "judge-" + uuid.uuid4().hex[:12])
+
     tasks = [
-        ("bank_wakeups", lambda: BankIngestion(orchestrator).recover_wakeups()),
+        ("bank_wakeups", bank_wakeups),
         ("outbound", lambda: recover_pending(orchestrator)),
         ("demo_observations", refresh_demo),
         ("feed", lambda: poll_feed(orchestrator)),
         ("clocks", lambda: poll_clocks(orchestrator)),
+        ("practice_pool", practice_pool),
     ]
-    while not stopped.is_set():
-        for name, task in tasks:
-            if stopped.is_set():
-                return
-            try:
-                task()
-            except Exception as error:
-                (settings.data_dir / "feed_error.json").write_text(
-                    json.dumps({"task": name, "error": type(error).__name__, "at": now()})
-                )
-        stopped.wait(3)
+    # Only one replica polls; others keep processing leased jobs and stand by.
+    lease = BackgroundLease(settings.data_dir)
+    try:
+        while not stopped.is_set():
+            run_background_round(lease, tasks, stopped, settings)
+            stopped.wait(3)
+    finally:
+        lease.release()
+
+
+def run_background_round(lease, tasks, stopped, settings):
+    """Run each task only while this replica holds (and renews) the polling lease."""
+    for name, task in tasks:
+        if stopped.is_set() or not lease.acquire():
+            return
+        try:
+            task()
+        except Exception as error:
+            write_atomic(
+                settings.data_dir / "feed_error.json",
+                {"task": name, "error": type(error).__name__, "at": now()},
+            )
 
 
 def run_worker(orchestrator, stopped):

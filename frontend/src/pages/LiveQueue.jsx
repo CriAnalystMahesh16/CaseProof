@@ -66,7 +66,7 @@ export default function Queue({ mode, activeResource, scope, setScope }) {
         </div>
       </div>
       <ErrorBanner error={resource.error} onRetry={resource.reload} />
-      <div className="workspace-scope">
+      <div className="workspace-scope" data-tour="workspace-scope">
         <span className="row gap8">
           <span className="live-dot" />
           Updates every 5 seconds
@@ -86,7 +86,7 @@ export default function Queue({ mode, activeResource, scope, setScope }) {
           </select>
         </label>
       </div>
-      <div className="kpis">
+      <div className="kpis" data-tour="kpis">
         <Card className="kpi">
           <div className="row">
             <span className="muted">Confirmed disputed</span>
@@ -148,7 +148,7 @@ export default function Queue({ mode, activeResource, scope, setScope }) {
         </Card>
       </div>
       <div className="command-grid">
-        <Card className="queue-card">
+        <Card className="queue-card" data-tour="case-queue">
           <CardH
             title={
               <>

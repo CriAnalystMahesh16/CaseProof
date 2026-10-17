@@ -76,8 +76,10 @@ def install(app, o):
         origin = request.headers.get("origin")
         if origin and origin != str(request.base_url).rstrip("/"):
             raise PermissionError("cross-origin session")
-        sid = "judge-" + uuid.uuid4().hex[:12]
-        DemoWorld(o, sid).ensure()
+        sid = DemoWorld.claim_ready(o)
+        if sid is None:
+            sid = "judge-" + uuid.uuid4().hex[:12]
+            DemoWorld(o, sid).ensure()
         response.set_cookie("cp_demo", sid, httponly=True, samesite="strict", max_age=86400)
         response.delete_cookie("cp_victim")
         return {"session_id": sid, "synthetic": True, "complaints_created": 0}

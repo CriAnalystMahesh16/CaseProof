@@ -43,6 +43,18 @@ class SQLiteJobs:
             raise ValueError("invalid job priority")
         job_id = "JOB-" + uuid.uuid4().hex[:12]
         with self.store.engine.begin() as db:
+            # A newer revision supersedes earlier jobs that no completed job has covered
+            # (queued, running, failed or stale). Inherit their priority so background
+            # refreshes cannot demote an interactive complaint behind the backlog.
+            inherited = db.execute(
+                text(
+                    "SELECT max(priority) FROM jobs WHERE case_id=:c AND revision<:r "
+                    "AND revision>coalesce((SELECT max(revision) FROM jobs "
+                    "WHERE case_id=:c AND status='done'),-1)"
+                ),
+                {"c": case_id, "r": revision},
+            ).scalar()
+            priority = max(priority, inherited or 0)
             db.execute(
                 text(
                     "INSERT OR IGNORE INTO jobs(job_id,case_id,revision,status,error,priority) "

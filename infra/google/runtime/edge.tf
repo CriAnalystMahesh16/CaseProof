@@ -8,7 +8,8 @@ resource "google_compute_security_policy" "uploads" {
     action   = "throttle"
     priority = 100
     match {
-      expr { expression = "request.method == 'POST' && request.path.matches('/v1/(victim|customer)/.*')" }
+      # Cloud Armor regular expressions reject capture groups; use prefixes.
+      expr { expression = "request.method == 'POST' && (request.path.startsWith('/v1/victim/') || request.path.startsWith('/v1/customer/'))" }
     }
     rate_limit_options {
       conform_action = "allow"
@@ -135,6 +136,11 @@ resource "google_compute_target_https_proxy" "edge" {
   url_map          = google_compute_url_map.edge.id
   ssl_certificates = [google_compute_managed_ssl_certificate.edge.id]
   ssl_policy       = google_compute_ssl_policy.edge.id
+}
+# Reserved before the first apply so the public domain (sslip.io) can name its IP.
+import {
+  to = google_compute_global_address.edge
+  id = "projects/${var.project_id}/global/addresses/caseproof-edge"
 }
 resource "google_compute_global_address" "edge" {
   name       = "caseproof-edge"

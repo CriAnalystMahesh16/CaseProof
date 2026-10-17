@@ -70,3 +70,23 @@ def test_bank_refresh_carries_interactive_priority_to_new_revision(tmp_path):
     job = o.jobs.take()
     assert job["case_id"] == "ACTIVE" and job["revision"] == s.revision
     assert job["priority"] == 10
+
+
+def test_superseding_job_keeps_unfinished_interactive_priority(tmp_path):
+    from sqlalchemy import text
+
+    o = runtime(tmp_path)
+    o.store.create("J", customer_account="test")
+    o.store.create("B", customer_account="other")
+    interactive = o.jobs.enqueue("J", 1, priority=10)
+    with o.store.engine.begin() as db:  # e.g. OCR was unavailable
+        db.execute(text("UPDATE jobs SET status='failed' WHERE job_id=:j"), {"j": interactive})
+    # A background refresh publishes a newer revision without a priority of its own.
+    superseding = o.jobs.enqueue("J", 2)
+    assert o.jobs.get(superseding)["priority"] == 10
+    # Once a job has completed the case, later background work stays background.
+    with o.store.engine.begin() as db:
+        db.execute(text("UPDATE jobs SET status='done' WHERE job_id=:j"), {"j": superseding})
+    assert o.jobs.get(o.jobs.enqueue("J", 3))["priority"] == 0
+    # Other cases are unaffected.
+    assert o.jobs.get(o.jobs.enqueue("B", 1))["priority"] == 0

@@ -12,6 +12,7 @@ var
 **/*.tfstate
 **/*.tfstate.*
 **/*.tfvars
+**/*.plan
 CODEX_FIXUP_PROMPT.md
 docs/RESEARCH.md
 **/node_modules

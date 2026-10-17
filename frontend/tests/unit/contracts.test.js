@@ -53,34 +53,59 @@ describe("API transport", () => {
       expect(fetcher).toHaveBeenCalledTimes(1);
     },
   );
-  it("maps schema errors to fields", async () => {
+  it("waits while a practice bank is still being prepared, then reads", async () => {
+    vi.useFakeTimers();
+    const preparing = () =>
+      new Response(JSON.stringify({ detail: "bank_data_preparing" }), {
+        status: 503,
+        headers: { "Retry-After": "1" },
+      });
     const fetcher = vi
       .fn()
-      .mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            detail: [{ loc: ["body", "narrative"], msg: "Too short" }],
-          }),
-          { status: 422 },
-        ),
-      );
+      .mockResolvedValueOnce(preparing())
+      .mockResolvedValueOnce(preparing())
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true })));
+    const result = apiRequest("/v1/victim/me", { fetcher });
+    await vi.advanceTimersByTimeAsync(2500);
+    await expect(result).resolves.toEqual({ ok: true });
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    vi.useRealTimers();
+  });
+  it("does not wait on other server errors", async () => {
+    const fetcher = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ detail: "scanner_unavailable" }), {
+        status: 503,
+      }),
+    );
+    await expect(apiRequest("/v1/x", { fetcher })).rejects.toMatchObject({
+      status: 503,
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+  it("maps schema errors to fields", async () => {
+    const fetcher = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          detail: [{ loc: ["body", "narrative"], msg: "Too short" }],
+        }),
+        { status: 422 },
+      ),
+    );
     await expect(apiRequest("/v1/x", { fetcher })).rejects.toMatchObject({
       fieldErrors: { narrative: "Too short" },
     });
   });
   it("only publishes matching revision/digest and limits reconciliation", async () => {
-    const fetcher = vi
-      .fn()
-      .mockImplementation(
-        async (url) =>
-          new Response(
-            JSON.stringify({
-              case_id: "A",
-              revision: url.endsWith("workflow") ? 2 : 1,
-              digest: "x",
-            }),
-          ),
-      );
+    const fetcher = vi.fn().mockImplementation(
+      async (url) =>
+        new Response(
+          JSON.stringify({
+            case_id: "A",
+            revision: url.endsWith("workflow") ? 2 : 1,
+            digest: "x",
+          }),
+        ),
+    );
     await expect(loadCaseView("A", { fetcher })).rejects.toThrow(
       "Updating assessment",
     );

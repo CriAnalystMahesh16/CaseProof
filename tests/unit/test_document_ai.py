@@ -115,3 +115,32 @@ def test_document_ai_low_confidence_is_explicit_and_blank_page_is_valid(tmp_path
     assert segments[0].ocr_model_id.endswith(":low-confidence")
     body["document"]["pages"][0]["lines"] = []
     assert DocumentAI(s, session=Service(body)).transcribe_image("C", artifact, raw)[0] == []
+
+
+@pytest.mark.parametrize(
+    "version, valid",
+    [
+        ("pretrained-ocr-v1.0-2020-09-23", True),  # real Google stable version ID
+        ("pretrained-ocr-v2.1.1-2025-01-31", True),
+        ("../other-processor", False),
+        ("v1/../../x", False),
+        ("v1..2", False),
+    ],
+)
+def test_processor_version_accepts_real_dotted_ids_only(tmp_path, version, valid):
+    from caseproof.adapters.document_ai import DocumentAI
+
+    settings = Settings(
+        _env_file=None,
+        data_dir=tmp_path,
+        google_cloud_project="caseproof-test",
+        documentai_location="asia-south1",
+        documentai_processor_id="abc123",
+        documentai_processor_version=version,
+        ocr_provider="documentai",
+    )
+    if valid:
+        assert DocumentAI(settings, session=object()).resource.endswith("/" + version)
+    else:
+        with pytest.raises(ValueError):
+            DocumentAI(settings, session=object())

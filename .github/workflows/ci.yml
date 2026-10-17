@@ -25,6 +25,12 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm test
       - run: npm run build
+      - name: Frontend service images (local and cloud profiles)
+        run: |
+          docker build -t caseproof-frontend:ci .
+          docker build --build-arg FRONTEND_PROFILE=cloud \
+            --build-arg VITE_GOOGLE_CLIENT_ID=ci-placeholder.apps.googleusercontent.com \
+            -t caseproof-frontend-cloud:ci .
   backend:
     runs-on: ubuntu-24.04
     timeout-minutes: 30

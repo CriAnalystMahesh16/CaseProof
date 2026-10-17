@@ -114,10 +114,11 @@ class BigQueryBank:
         return self.client.query(
             f"""
             SELECT TO_JSON_STRING(STRUCT(
-                JSON_VALUE(t,'$.txn_id') txn_id, JSON_VALUE(t,'$.account') account,
-                CAST(JSON_VALUE(t,'$.amount_minor') AS INT64) amount_minor,
-                JSON_VALUE(t,'$.payee') payee, JSON_VALUE(t,'$.ts') ts,
-                JSON_VALUE(t,'$.reference') reference, JSON_VALUE(t,'$.direction') direction
+                JSON_VALUE(t,'$.txn_id') AS txn_id, JSON_VALUE(t,'$.account') AS account,
+                CAST(JSON_VALUE(t,'$.amount_minor') AS INT64) AS amount_minor,
+                JSON_VALUE(t,'$.payee') AS payee, JSON_VALUE(t,'$.ts') AS ts,
+                JSON_VALUE(t,'$.reference') AS reference,
+                JSON_VALUE(t,'$.direction') AS direction
             )) FROM {self.client.table("bank_batches")} b,
             UNNEST(JSON_QUERY_ARRAY(b.payload,'$.transactions')) t
             WHERE b.tenant=@tenant AND JSON_VALUE(t,'$.account')=@account

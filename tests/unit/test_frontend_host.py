@@ -47,3 +47,16 @@ def test_customer_bridge_validates_before_redirect(tmp_path, monkeypatch):
 def test_expired_customer_link_stays_denied(tmp_path, monkeypatch):
     client = application(tmp_path, monkeypatch, valid=False)
     assert client.get("/customer/expired").status_code == 403
+
+
+def test_api_service_runs_without_static_assets(monkeypatch):
+    api = FastAPI()
+    api.state.orchestrator = object()
+    monkeypatch.setattr(
+        "caseproof.api.frontend.CustomerLinks",
+        lambda _: SimpleNamespace(resolve=lambda token: None),
+    )
+    client = TestClient(integrate_frontend(api))
+    assert client.get("/app/").status_code == 404
+    response = client.get("/customer/safe-token", follow_redirects=False)
+    assert response.headers["location"] == "/app/#/victim/reply/safe-token"

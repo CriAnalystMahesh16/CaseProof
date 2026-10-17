@@ -167,3 +167,39 @@ def test_vertex_smoke_check_has_project_specific_cache_and_provider(tmp_path, mo
     s.google_cloud_project = "another-project"
     assert json.loads(gemini_llm.smoke_check(s))["mode"] == "live"
     assert len(called) == 2
+
+
+def test_extraction_cites_short_aliases_and_maps_them_to_real_segment_ids(tmp_path, monkeypatch):
+    from caseproof.domain.contracts import Segment
+
+    sent = []
+
+    def generate(**kwargs):
+        sent.append(json.loads(kwargs["contents"][1]))
+        claim = {
+            "claim_id": "x",
+            "kind": "amount",
+            "normalized_value": 50000,
+            "anchor_segment_ids": ["S2"],
+        }
+        bad = {**claim, "kind": "currency", "anchor_segment_ids": ["seg-ART-0"]}
+        return SimpleNamespace(
+            text=json.dumps({"claims": [claim, bad], "unresolved_fields": []}),
+            usage_metadata=SimpleNamespace(prompt_token_count=1, candidates_token_count=1),
+            candidates=[SimpleNamespace(finish_reason="STOP")],
+        )
+
+    monkeypatch.setattr(
+        gemini_llm.genai,
+        "Client",
+        lambda **kw: SimpleNamespace(models=SimpleNamespace(generate_content=generate)),
+    )
+    segments = [
+        Segment(segment_id=f"seg-ART-1066ea88ab1b-{i}", artifact_id="ART-1066ea88ab1b", text=t)
+        for i, t in enumerate(["Paid to fraud@upi", "INR 500.00"])
+    ]
+    result = Provider(settings(tmp_path)).extract_claims("C", 1, segments)
+    assert [s["segment_id"] for s in sent[0]["segments"]] == ["S1", "S2"]
+    assert result.claims[0].anchor_segment_ids == ["seg-ART-1066ea88ab1b-1"]
+    # An unmappable citation is passed through unchanged, so validation rejects it.
+    assert result.claims[1].anchor_segment_ids == ["seg-ART-0"]

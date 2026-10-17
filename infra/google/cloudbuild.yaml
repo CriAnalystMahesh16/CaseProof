@@ -1,6 +1,11 @@
 # Manual build/test/push only. No deploy step and no deployment trigger.
 substitutions:
   _REGION: asia-south1
+  # practice: demo personas confined to each practice session; google: staff sign-in
+  # with the OAuth web client ID in _STAFF_CLIENT_ID (the API's STAFF_AUDIENCE).
+  _STAFF_ACCESS: practice
+  _STAFF_CLIENT_ID: ''
+
 serviceAccount: projects/$PROJECT_ID/serviceAccounts/caseproof-build@$PROJECT_ID.iam.gserviceaccount.com
 steps:
   - name: gcr.io/cloud-builders/docker
@@ -27,9 +32,15 @@ steps:
   - name: gcr.io/cloud-builders/docker
     args: [run, --rm, --network, none, '${_REGION}-docker.pkg.dev/$PROJECT_ID/caseproof/scanner:$BUILD_ID',
            python, check_scanner.py]
+  - name: gcr.io/cloud-builders/docker
+    dir: frontend
+    args: [build, --build-arg, FRONTEND_PROFILE=cloud, --build-arg, 'STAFF_ACCESS=${_STAFF_ACCESS}',
+           --build-arg, 'VITE_GOOGLE_CLIENT_ID=${_STAFF_CLIENT_ID}',
+           -t, '${_REGION}-docker.pkg.dev/$PROJECT_ID/caseproof/frontend:$BUILD_ID', .]
 images:
   - '${_REGION}-docker.pkg.dev/$PROJECT_ID/caseproof/backend:$BUILD_ID'
   - '${_REGION}-docker.pkg.dev/$PROJECT_ID/caseproof/scanner:$BUILD_ID'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/caseproof/frontend:$BUILD_ID'
 options:
   logging: CLOUD_LOGGING_ONLY
 timeout: 1800s

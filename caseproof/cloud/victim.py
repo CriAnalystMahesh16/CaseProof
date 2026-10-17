@@ -99,7 +99,7 @@ def install(app, o):
         def reserve(tx):
             path = "demo_limits/sessions-" + day
             limit = tx.get(path) or {"count": 0}
-            if limit["count"] >= 10:
+            if limit["count"] >= o.s.cloud_practice_daily_limit:
                 raise HTTPException(429, "daily_practice_session_limit")
             limit["count"] += 1
             tx.set(path, limit)

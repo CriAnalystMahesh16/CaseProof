@@ -3,6 +3,7 @@
 import base64
 import json
 import os
+import subprocess
 import tempfile
 import time
 from io import BytesIO
@@ -10,11 +11,46 @@ from pathlib import Path
 
 from PIL import Image
 
-from local_services.cloud_scanner import scan_bytes, signatures, verify_engine
+from local_services.cloud_scanner import (
+    clamd_config,
+    daemon_ready,
+    scan_bytes,
+    signatures,
+    verify_engine,
+)
+
+
+def start_engine():
+    """Load the same resident engine the service uses and time the one-off load."""
+    config = Path(tempfile.gettempdir()) / "caseproof-check-clamd.conf"
+    config.write_text(clamd_config())
+    started = time.perf_counter()
+    daemon = subprocess.Popen(["clamd", "--config-file=" + str(config)])
+    while time.perf_counter() - started < 150:
+        if daemon.poll() is not None:
+            raise AssertionError("resident engine exited while loading signatures")
+        try:
+            if daemon_ready():
+                return daemon, round(time.perf_counter() - started, 3)
+        except RuntimeError:
+            pass
+        time.sleep(0.5)
+    daemon.kill()
+    raise AssertionError("resident engine did not load signatures within 150s")
 
 
 def main():
     version = verify_engine()
+    daemon, load_seconds = start_engine()
+    print(json.dumps({"check": "engine_load", "elapsed_seconds": load_seconds}), flush=True)
+    try:
+        run_checks(version, load_seconds)
+    finally:
+        daemon.terminate()
+        daemon.wait(timeout=20)
+
+
+def run_checks(version, load_seconds):
     png = BytesIO()
     Image.new("RGB", (64, 32), "white").save(png, format="PNG")
     eicar = base64.b64decode(
@@ -58,6 +94,7 @@ def main():
             os.environ.pop("CLAMAV_DATABASE", None)
         else:
             os.environ["CLAMAV_DATABASE"] = previous
+    results["engine_load_seconds"] = load_seconds
     print(json.dumps({"ok": True, "engine_version": version, "checks": results}), flush=True)
 
 

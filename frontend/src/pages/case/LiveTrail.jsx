@@ -225,7 +225,7 @@ export default function MoneyTrail({ view }) {
         </CardH>
 
         <div className="trail-controls">
-          <div className="legend">
+          <div className="legend" data-tour="trail-legend">
             <span>
               <i style={{ borderColor: "#3c9a67" }} />
               Sourced transfer
@@ -532,7 +532,7 @@ export default function MoneyTrail({ view }) {
       </Card>
 
       <div className="col gap12">
-        <Card className="card-b">
+        <Card className="card-b" data-tour="trail-positions">
           <div className="eyebrow">Attributed positions · assessment time</div>
 
           <div className="position-total">
@@ -557,7 +557,7 @@ export default function MoneyTrail({ view }) {
           </div>
         </Card>
 
-        <Card className="card-b">
+        <Card className="card-b" data-tour="trail-inspector">
           <div className="eyebrow">Account inspector</div>
 
           {account ? (

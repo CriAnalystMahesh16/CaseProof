@@ -19,7 +19,10 @@ class DocumentAI:
             settings.documentai_processor_id,
             settings.documentai_processor_version,
         ]
-        if not all(re.fullmatch(r"[A-Za-z0-9_-]+", part or "") for part in components):
+        # Real version IDs contain dots (pretrained-ocr-v1.0-2020-09-23); no "/" or "..".
+        if not all(
+            re.fullmatch(r"[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*", part or "") for part in components
+        ):
             raise ValueError(
                 "Document AI requires explicit project, location, processor and version"
             )
