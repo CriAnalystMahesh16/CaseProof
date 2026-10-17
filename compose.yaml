@@ -1,0 +1,37 @@
+name: caseproof
+services:
+  app:
+    image: caseproof-app:local
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    init: true
+    ports: ["127.0.0.1:${CASEPROOF_PORT:-8080}:8080"]
+    volumes: [application-data:/data]
+    environment:
+      RUNTIME_BACKEND: local
+      DATA_DIR: /data
+      SQLITE_URL: sqlite:////data/caseproof.db
+      DUCKDB_PATH: /data/bank.duckdb
+      OBJECT_DIR: /data/objects
+      TRAIL_FEED_URL: http://127.0.0.1:8771
+      TRAIL_FEED_PATH: /data/trail_feed.json
+      LOCAL_OCR_URL: http://127.0.0.1:8770
+      MOCK_SERVICES_URL: http://127.0.0.1:8765
+      LLM_PROVIDER: local
+      LLM_MODE: local
+      EXTERNAL_WORKER: "true"
+      JOB_LEASE_SECONDS: "15"
+      CUSTOMER_PORTAL: "true"
+      PRELOADED_DEMO: "true"
+      PUBLIC_BASE_URL: ${CASEPROOF_PUBLIC_BASE_URL:-http://127.0.0.1:8080}
+    restart: unless-stopped
+    stop_grace_period: 30s
+    healthcheck:
+      test: [CMD, python, -m, local_services.application, --health]
+      interval: 15s
+      timeout: 15s
+      retries: 12
+      start_period: 180s
+volumes:
+  application-data:

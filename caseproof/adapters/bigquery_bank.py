@@ -1,0 +1,214 @@
+"""Tenant-scoped, byte-capped BigQuery records; no LLM-written SQL."""
+
+import json
+import re
+import time
+from datetime import datetime, timedelta, timezone
+
+from caseproof.adapters.google_http import authorized_session
+from caseproof.domain.ledger import dt
+
+
+class BigQuery:
+    def __init__(self, project, dataset, location, *, maximum_bytes=100_000_000, session=None):
+        if not re.fullmatch(r"[a-z][a-z0-9-]{4,61}[a-z0-9]", project or ""):
+            raise ValueError("Explicit BigQuery project required")
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,100}", dataset or ""):
+            raise ValueError("Invalid dataset")
+        if (
+            not re.fullmatch(r"[a-z]+-[a-z]+[0-9]", location or "")
+            or not 10_000_000 <= maximum_bytes <= 100_000_000
+        ):
+            raise ValueError("Regional, bounded BigQuery configuration required")
+        self.project, self.dataset, self.location = project, dataset, location
+        self.maximum_bytes, self.session = (
+            maximum_bytes,
+            session if session is not None else authorized_session(),
+        )
+
+    def table(self, name):
+        if name not in {"bank_batches", "downstream_reports", "complaints"}:
+            raise ValueError("Unknown bank table")
+        return f"`{self.project}.{self.dataset}.{name}`"
+
+    def query(self, sql, parameters):
+        url = f"https://bigquery.googleapis.com/bigquery/v2/projects/{self.project}/queries"
+        response = self.session.post(
+            url,
+            json={
+                "query": sql,
+                "useLegacySql": False,
+                "location": self.location,
+                "maximumBytesBilled": str(self.maximum_bytes),
+                "maxResults": 501,
+                "timeoutMs": 1000,
+                "parameterMode": "NAMED",
+                "queryParameters": [
+                    {"name": k, "parameterType": {"type": "STRING"}, "parameterValue": {"value": v}}
+                    for k, v in parameters.items()
+                ],
+            },
+            timeout=15,
+        )
+        response.raise_for_status()
+        result, deadline = response.json(), time.monotonic() + 45
+        while not result.get("jobComplete", True):
+            if time.monotonic() > deadline:
+                raise TimeoutError("BIGQUERY_QUERY_TIMEOUT")
+            job = result["jobReference"]
+            if not re.fullmatch(r"[A-Za-z0-9_-]+", job["jobId"]):
+                raise ValueError("Invalid query job")
+            time.sleep(0.2)
+            response = self.session.get(
+                url + "/" + job["jobId"],
+                params={"location": self.location, "maxResults": 501},
+                timeout=10,
+            )
+            response.raise_for_status()
+            result = response.json()
+            result.setdefault("jobReference", job)
+        if result.get("errors"):
+            raise RuntimeError("BIGQUERY_QUERY_FAILED")
+        rows = result.get("rows", [])
+        if result.get("pageToken") or len(rows) > 500:
+            raise ValueError("bank_query_result_limit")
+        return [json.loads(row["f"][0]["v"]) for row in rows]
+
+    def publish(self, table, tenant, record_id, digest, payload):
+        target = self.table(table)
+        # Firestore reserves immutable identity; repeated SQL publication is deduplicated.
+        extra_columns = ",reported_at" if table == "downstream_reports" else ""
+        extra_values = ",TIMESTAMP(JSON_VALUE(@payload,'$.reported_at'))" if extra_columns else ""
+        self.query(
+            f"""
+            BEGIN TRANSACTION;
+            ASSERT NOT EXISTS(SELECT 1 FROM {target}
+                WHERE tenant=@tenant AND id=@id AND digest!=@digest) AS 'immutable batch';
+            MERGE {target} t USING (SELECT @tenant tenant,@id id) s
+            ON t.tenant=s.tenant AND t.id=s.id
+            WHEN NOT MATCHED THEN INSERT(tenant,id,digest,payload,received_at{extra_columns})
+            VALUES(@tenant,@id,@digest,@payload,CURRENT_TIMESTAMP(){extra_values});
+            COMMIT TRANSACTION;
+        """,
+            {"tenant": tenant, "id": record_id, "digest": digest, "payload": payload},
+        )
+
+
+class BigQueryBank:
+    def __init__(self, client, tenant, documents, max_age=900):
+        if not tenant or len(tenant) > 100:
+            raise ValueError("Explicit bank tenant required")
+        self.client, self.tenant, self.documents = client, tenant, documents
+        self.max_age = max_age
+
+    def batches(self, as_of=None):
+        return self.client.query(
+            f"SELECT payload FROM {self.client.table('bank_batches')} WHERE tenant=@tenant "
+            + ("AND received_at<=TIMESTAMP(@as_of) " if as_of else "")
+            + "QUALIFY ROW_NUMBER() OVER(PARTITION BY id ORDER BY received_at)=1",
+            {"tenant": self.tenant, **({"as_of": as_of} if as_of else {})},
+        )
+
+    def transactions(self, account, as_of=None):
+        instant = as_of or datetime.now(timezone.utc).isoformat()
+        return self.client.query(
+            f"""
+            SELECT TO_JSON_STRING(STRUCT(
+                JSON_VALUE(t,'$.txn_id') txn_id, JSON_VALUE(t,'$.account') account,
+                CAST(JSON_VALUE(t,'$.amount_minor') AS INT64) amount_minor,
+                JSON_VALUE(t,'$.payee') payee, JSON_VALUE(t,'$.ts') ts,
+                JSON_VALUE(t,'$.reference') reference, JSON_VALUE(t,'$.direction') direction
+            )) FROM {self.client.table("bank_batches")} b,
+            UNNEST(JSON_QUERY_ARRAY(b.payload,'$.transactions')) t
+            WHERE b.tenant=@tenant AND JSON_VALUE(t,'$.account')=@account
+              AND received_at<=TIMESTAMP(@as_of)
+              AND TIMESTAMP(JSON_VALUE(t,'$.ts'))<=TIMESTAMP(@as_of)
+              AND EXISTS(SELECT 1 FROM UNNEST(JSON_QUERY_ARRAY(b.payload,'$.coverage')) c
+                WHERE JSON_VALUE(c,'$.account')=@account
+                  AND TIMESTAMP(JSON_VALUE(c,'$.as_of'))<=TIMESTAMP(@as_of)
+                  AND TIMESTAMP(JSON_VALUE(t,'$.ts')) BETWEEN
+                      TIMESTAMP(JSON_VALUE(c,'$.start')) AND TIMESTAMP(JSON_VALUE(c,'$.end')))
+            QUALIFY ROW_NUMBER() OVER(PARTITION BY JSON_VALUE(t,'$.txn_id') ORDER BY received_at)=1
+            ORDER BY TIMESTAMP(JSON_VALUE(t,'$.ts'))
+        """,
+            {"tenant": self.tenant, "account": account, "as_of": instant},
+        )
+
+    def complaints(self, start, end):
+        rows = self.client.query(
+            f"SELECT payload FROM {self.client.table('complaints')} WHERE tenant=@tenant "
+            "AND TIMESTAMP(JSON_VALUE(payload,'$.reported_at')) "
+            "BETWEEN TIMESTAMP(@start) AND TIMESTAMP(@end) "
+            "AND received_at<=TIMESTAMP(@as_of) "
+            "QUALIFY ROW_NUMBER() OVER(PARTITION BY JSON_VALUE(payload,'$.complaint_id') "
+            "ORDER BY received_at DESC)=1",
+            {
+                "tenant": self.tenant,
+                "start": start,
+                "end": end,
+                "as_of": getattr(self, "observation_as_of", end),
+            },
+        )
+
+        return [r for r in rows if r.get("complaint_id") != getattr(self, "exclude_case_id", None)]
+
+    def check_account(self, account, tenant):
+        from caseproof.adapters.firestore_casestore import identity
+
+        if tenant != self.tenant:
+            raise PermissionError("bank tenant mismatch")
+        owner = self.documents.get("bank_owners/" + identity(account))
+        if owner and owner["tenant"] != tenant:
+            raise PermissionError("bank account belongs to another tenant")
+
+    def customers(self, tenant):
+        if tenant != self.tenant:
+            raise PermissionError("bank tenant mismatch")
+        result = {}
+        for batch in self.batches():
+            for customer in batch["customers"]:
+                result[customer["account"]] = {**customer, "bank": batch["bank"], "synthetic": True}
+        return list(result.values())
+
+    def verification(self, account, tenant, start, end, as_of=None):
+        from caseproof.domain.freshness import observation_freshness
+
+        self.check_account(account, tenant)
+        records = [
+            (batch["batch_id"], c)
+            for batch in self.batches(as_of)
+            for c in batch["coverage"]
+            if c["account"] == account and (not as_of or dt(c["as_of"]) <= dt(as_of))
+        ]
+
+        def cover(rows):
+            cursor, used = dt(start) - timedelta(hours=2), []
+            for bid, c in sorted(
+                rows, key=lambda row: (dt(row[1]["start"]), -dt(row[1]["as_of"]).timestamp())
+            ):
+                if dt(c["start"]) <= cursor < dt(c["end"]):
+                    cursor = dt(c["end"])
+                    used.append((bid, c))
+            return cursor >= dt(end), used
+
+        complete_interval, historical = cover(records)
+        fresh = [
+            r
+            for r in records
+            if not as_of
+            or observation_freshness(r[1]["as_of"], as_of, self.max_age)["state"] == "fresh"
+        ]
+        complete, used = cover(fresh)
+        chosen = used if complete else historical
+        observed = min((c["as_of"] for _, c in chosen), key=dt, default=None)
+        return {
+            "complete": complete,
+            "interval_complete": complete_interval,
+            "observed_at": observed,
+            "batch_ids": sorted({bid for bid, _ in chosen}),
+            "account": account,
+            "scope": "own_bank_debits",
+            "start": start,
+            "end": end,
+            "freshness": observation_freshness(observed, as_of, self.max_age) if as_of else {},
+        }
