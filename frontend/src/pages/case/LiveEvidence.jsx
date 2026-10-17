@@ -1,6 +1,7 @@
 import { canRequestRole } from "../../api/auth.js";
 import React, { useState, useEffect } from "react";
 import { FileImage, Upload, ArrowRight, Database } from "lucide-react";
+import { GeminiReader } from "../../components/Gemini.jsx";
 import {
   Card,
   CardH,
@@ -105,6 +106,14 @@ export default function Evidence({ view, reload, stale }) {
               />
             ) : (
               <Empty>No evidence received.</Empty>
+            )}
+            {artifact && (
+              <GeminiReader
+                caseId={s.case_id}
+                artifact={artifact}
+                persona={persona}
+                onSelect={select}
+              />
             )}
             {artifact && (
               <>

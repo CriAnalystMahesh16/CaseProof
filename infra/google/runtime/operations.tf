@@ -1,6 +1,6 @@
 resource "google_logging_metric" "backend_errors" {
   name   = "caseproof/backend_errors"
-  filter = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=~\"caseproof-.*\" AND severity>=ERROR"
+  filter = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=~\"caseproof-.*\" AND severity>=ERROR AND jsonPayload.event:*"
   metric_descriptor {
     metric_kind = "DELTA"
     value_type  = "INT64"
@@ -39,10 +39,12 @@ resource "google_monitoring_alert_policy" "backend_errors" {
   conditions {
     display_name = "Backend errors in five minutes"
     condition_threshold {
-      filter          = "resource.type=\"cloud_run_revision\" AND metric.type=\"logging.googleapis.com/user/${google_logging_metric.backend_errors.name}\""
+      filter = "resource.type=\"cloud_run_revision\" AND metric.type=\"logging.googleapis.com/user/${google_logging_metric.backend_errors.name}\""
+      # Single retried failures (a Document AI timeout, a Gemini 429) recover on
+      # their own; alert only on a sustained burst.
       duration        = "0s"
       comparison      = "COMPARISON_GT"
-      threshold_value = 0
+      threshold_value = 3
       aggregations {
         alignment_period   = "300s"
         per_series_aligner = "ALIGN_SUM"

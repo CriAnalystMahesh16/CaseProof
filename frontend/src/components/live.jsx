@@ -35,7 +35,12 @@ export function ErrorBanner({ error, onRetry }) {
           </span>
         ))}
       </span>
-      {onRetry && (
+      {error.code === "practice_session_required" && (
+        <a className="btn sm primary" href="#/victim/start">
+          Start a practice session
+        </a>
+      )}
+      {onRetry && error.code !== "practice_session_required" && (
         <button className="btn sm" onClick={onRetry}>
           Try again
         </button>

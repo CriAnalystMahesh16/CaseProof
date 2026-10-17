@@ -45,8 +45,8 @@ class FirestoreLLMCache:
             if cached and cached.get("until", 0) > time.time():
                 raise CallCapError("model_call_in_progress")
             case, daily = tx.get(case_path) or {"count": 0}, tx.get(daily_path) or {"count": 0}
-            if case["count"] >= min(8, self.s.llm_max_calls_per_case) or daily["count"] >= min(
-                500, self.s.llm_daily_call_cap
+            if case["count"] >= min(24, self.s.llm_max_calls_per_case) or daily["count"] >= min(
+                5000, self.s.llm_daily_call_cap
             ):
                 raise CallCapError("LLM call cap reached")
             for path, counter in ((case_path, case), (daily_path, daily)):

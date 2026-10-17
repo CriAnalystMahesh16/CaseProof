@@ -71,7 +71,7 @@ variable "processor_version" {
 }
 variable "gemini_model" {
   type    = string
-  default = "gemini-2.5-flash"
+  default = "gemini-3.5-flash"
 }
 variable "staff_audience" {
   type    = string
@@ -103,4 +103,14 @@ resource "terraform_data" "deployment_gate" {
       error_message = "DEPLOYMENT HELD: frontend/backend acceptance, real image digests, processor/version, staff identity mapping or practice personas, and domain are required. Do not enable without the user's deployment instruction."
     }
   }
+}
+variable "practice_daily_limit" {
+  description = "Practice sessions per UTC day across all visitors"
+  type        = number
+  default     = 200
+}
+variable "llm_daily_call_cap" {
+  description = "Gemini calls per UTC day across all visitors (a cost guard)"
+  type        = number
+  default     = 3000
 }

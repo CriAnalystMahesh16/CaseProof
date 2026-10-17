@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Printer } from "lucide-react";
 import { formatMinor, time, label } from "../../models/caseView.js";
+import { GeminiStatement } from "../../components/Gemini.jsx";
 
 // The system's end product, rendered as the document the two receivers got:
 // the bank case ticket (full approved brief) and the cybercrime report update.
@@ -115,6 +116,7 @@ export default function PacketDocument({ packet }) {
       )}
 
       <h3>2 · Cybercrime report update (for receiving banks)</h3>
+      <GeminiStatement caseId={brief.case_id} revision={packet.revision} />
       <table className="packet-table">
         <caption>Disputed debits</caption>
         <thead>

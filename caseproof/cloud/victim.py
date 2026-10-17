@@ -5,6 +5,7 @@ import time
 from types import SimpleNamespace
 
 from fastapi import Cookie, Depends, File, Form, HTTPException, Request, Response, UploadFile
+from pydantic import BaseModel, Field
 
 from caseproof.adapters.bank_factory import bank_services
 from caseproof.adapters.firestore_casestore import identity
@@ -12,6 +13,10 @@ from caseproof.adapters.sqlite_casestore import ConflictError
 from caseproof.api.victim import Complaint, PaymentDecision, PracticeScenario, Session
 from caseproof.cloud.bank_network import CloudBankNetwork
 from caseproof.domain.contracts import CaseSnapshot, hash_json, now
+
+
+class IntakeDraft(BaseModel):
+    narrative: str = Field(min_length=10, max_length=4000)
 
 
 def install(app, o):
@@ -22,7 +27,7 @@ def install(app, o):
         if origin and origin != o.s.public_base_url.rstrip("/"):
             raise PermissionError("cross-origin victim mutation")
 
-    def catalogue(request):
+    def session_row(request):
         token = request.cookies.get("cp_demo")
         if not token:
             row = docs.get("demo_catalogues/" + identity("demo"))
@@ -30,8 +35,14 @@ def install(app, o):
             row = docs.get("demo_sessions/" + hash_json(token))
             if row and row["expires"] <= time.time():
                 row = None
+        return row
+
+    def catalogue(request):
+        row = session_row(request)
         if not row:
-            raise HTTPException(503, "synthetic_bank_data_not_preloaded")
+            # No practice session in this browser yet (first visit, another browser or
+            # an expired cookie): an explicit, actionable state rather than a 503.
+            raise HTTPException(401, "practice_session_required")
         return row
 
     app.state.cloud_catalogue = catalogue
@@ -87,7 +98,10 @@ def install(app, o):
 
     @app.get("/v1/victim/demo-customers")
     def people(request: Request):
-        return catalogue(request)["catalogue"]
+        row = session_row(request)
+        if not row:
+            return {"synthetic": True, "session": False, "customers": []}
+        return {**row["catalogue"], "session": True}
 
     @app.post("/v1/victim/demo-session")
     def new_session(request: Request, response: Response, body: PracticeScenario | None = None):
@@ -154,6 +168,13 @@ def install(app, o):
             "cp_victim", token, secure=True, httponly=True, samesite="strict", max_age=86400
         )
         return {"synthetic": True}
+
+    @app.post("/v1/victim/intake-assist")
+    def intake(body: IntakeDraft, request: Request, person=Depends(customer)):
+        from caseproof.genai import intake_assist
+
+        same_origin(request)
+        return intake_assist(o, person["tenant"], body.narrative)
 
     @app.get("/v1/victim/me")
     def me(person=Depends(customer)):

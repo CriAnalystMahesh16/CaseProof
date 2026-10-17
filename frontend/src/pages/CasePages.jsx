@@ -35,6 +35,7 @@ import Evidence from "./case/LiveEvidence.jsx";
 import MoneyTrail from "./case/LiveTrail.jsx";
 import Review from "./case/LiveReview.jsx";
 import Delivery from "./case/LiveDelivery.jsx";
+import { GeminiSummary } from "../components/Gemini.jsx";
 
 export default function CasePages({ view, tab, stale, reload }) {
   const props = { view, reload, stale };
@@ -74,6 +75,8 @@ function Overview({ view }) {
     next = brief.recommended_action || {};
   const to = (section) => go(`/staff/cases/${s.case_id}/${section}`);
   return (
+    <>
+    <GeminiSummary caseId={s.case_id} revision={s.revision} />
     <div className="g3 overview-grid">
       <Card>
         <CardH
@@ -281,6 +284,7 @@ function Overview({ view }) {
         )}
       </div>
     </div>
+    </>
   );
 }
 function Requests({ view, reload, stale }) {

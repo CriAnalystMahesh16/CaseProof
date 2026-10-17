@@ -1,6 +1,6 @@
 """Deployment-held stateless API and private worker; no frontend implementation."""
 
-from fastapi import Depends, FastAPI, File, Form, Header, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -184,8 +184,10 @@ def create_app(settings, orchestrator=None, *, worker=False):
 
     def practice_persona(request, persona):
         """Labelled synthetic persona, scoped to the caller's own practice tenant only."""
-        if persona not in {"analyst", "reviewer"} or not request.cookies.get("cp_demo"):
+        if persona not in {"analyst", "reviewer"}:
             raise PermissionError("authenticated_identity_required")
+        if not request.cookies.get("cp_demo"):
+            raise HTTPException(401, "practice_session_required")
         tenant = app.state.cloud_catalogue(request)["tenant"]
         if not tenant.startswith("judge-"):
             raise PermissionError("practice_session_required")
@@ -261,6 +263,27 @@ def create_app(settings, orchestrator=None, *, worker=False):
         authorised(cid, actor)
         snap = o.store.get(cid)
         return build_brief(snap, o.store.approval(cid, snap.revision))
+
+    @app.get("/v1/cases/{cid}/genai/summary")
+    def genai_summary(cid: str, revision: int | None = None, actor=Depends(identity)):
+        from caseproof.genai import case_summary
+
+        authorised(cid, actor)
+        snap = o.store.get(cid, revision)
+        return case_summary(o, snap, build_brief(snap, o.store.approval(cid, snap.revision)))
+
+    @app.get("/v1/cases/{cid}/artifacts/{aid}/genai-read")
+    def genai_read(cid: str, aid: str, actor=Depends(identity)):
+        from caseproof.genai import read_evidence
+
+        authorised(cid, actor)
+        snap = o.store.get(cid)
+        item = next((a for a in snap.artifacts if a.artifact_id == aid), None)
+        if not item:
+            raise KeyError("artifact not found")
+        if not item.mime_type.startswith("image/"):
+            return {"available": False, "reason": "not_an_image"}
+        return read_evidence(o, snap, item, o.storage.read(item.object_key))
 
     @app.get("/v1/cases/{cid}/report-preview")
     def preview(cid: str, actor=Depends(identity)):

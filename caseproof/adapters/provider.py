@@ -143,7 +143,10 @@ class Provider:
                     max_output_tokens=self.s.llm_max_output_tokens,
                     # Schema-bound extraction needs no reasoning budget; thinking tokens
                     # otherwise share max_output_tokens and truncate the JSON.
-                    thinking_config=types.ThinkingConfig(thinking_budget=0),
+                    # Gemini 3+ replaced the token budget with a thinking level.
+                    thinking_config=types.ThinkingConfig(thinking_level="MINIMAL")
+                    if not self.model_id.startswith("gemini-2")
+                    else types.ThinkingConfig(thinking_budget=0),
                 ),
             )
             reason = getattr(getattr(r, "candidates", [None])[0], "finish_reason", None)

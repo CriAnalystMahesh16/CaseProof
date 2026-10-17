@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { IntakeHelper } from "../../components/Gemini.jsx";
 import {
   ArrowRight,
   ArrowLeft,
@@ -226,8 +227,9 @@ function Start() {
             <>
               {!victims.length && (
                 <p className="muted">
-                  Start a fresh practice session above to generate a scam
-                  victim. Until then these customers have only normal payments.
+                  {customers.length
+                    ? "These customers have only normal payments. Start a fresh practice session above to generate a scam victim."
+                    : "No practice session yet. Choose the scam timing above and start one; your customers appear here in about 30 seconds."}
                 </p>
               )}
               <div className="customer-grid">
@@ -270,6 +272,7 @@ function Start() {
           <div className="hr" />
           <button
             className="btn"
+            hidden={!customers.length}
             disabled={action.busy}
             onClick={() =>
               action
@@ -587,6 +590,7 @@ function Report() {
                   placeholder="Describe what you remember. You do not need special wording."
                 />
               </label>
+              <IntakeHelper narrative={narrative} />
               <label>
                 How did the payment happen?
                 <select

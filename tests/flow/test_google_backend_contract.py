@@ -355,7 +355,10 @@ def test_practice_personas_are_confined_to_the_callers_own_practice_tenant(tmp_p
     with TestClient(create_app(o.s, o), base_url="https://caseproof.test") as visitor:
         # No practice session cookie: a persona header grants nothing.
         denied = visitor.get("/v1/workspace?scope=all", headers={"X-Demo-User": "analyst"})
-        assert denied.status_code == 403
+        assert denied.status_code == 401
+        assert denied.json()["detail"] == "practice_session_required"
+        # First visit: an empty customer list, not an error.
+        assert visitor.get("/v1/victim/demo-customers").json()["customers"] == []
         made = visitor.post("/v1/victim/demo-session")
         assert made.status_code == 200, made.text
         tenant = made.json()["session_id"]

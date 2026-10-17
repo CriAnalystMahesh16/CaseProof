@@ -23,9 +23,9 @@ locals {
     CLOUD_STAFF_AUDIENCE         = var.staff_audience,
     CLOUD_STAFF_PRINCIPALS       = jsonencode(var.staff_principals),
     CLOUD_PRACTICE_PERSONAS      = tostring(var.practice_personas),
-    CLOUD_PRACTICE_DAILY_LIMIT   = "50",
+    CLOUD_PRACTICE_DAILY_LIMIT   = tostring(var.practice_daily_limit),
     PUBLIC_BASE_URL              = "https://${var.public_domain}",
-    LLM_MAX_CALLS_PER_CASE       = "8", LLM_DAILY_CALL_CAP = "300", LLM_MAX_OUTPUT_TOKENS = "4096",
+    LLM_MAX_CALLS_PER_CASE       = "24", LLM_DAILY_CALL_CAP = tostring(var.llm_daily_call_cap), LLM_MAX_OUTPUT_TOKENS = "4096",
     JOB_LEASE_SECONDS            = "90"
   }
 }
@@ -87,6 +87,12 @@ resource "google_project_iam_member" "worker_vertex" {
   project = var.project_id
   role    = "roles/aiplatform.user"
   member  = "serviceAccount:${google_service_account.runtime["worker"].email}"
+}
+# The API serves the on-demand Gemini summary, evidence reading and intake helper.
+resource "google_project_iam_member" "api_vertex" {
+  project = var.project_id
+  role    = "roles/aiplatform.user"
+  member  = "serviceAccount:${google_service_account.runtime["api"].email}"
 }
 resource "google_project_iam_member" "worker_ocr" {
   project = var.project_id
@@ -168,7 +174,8 @@ resource "google_cloud_run_v2_service" "scanner" {
     max_instance_request_concurrency = 4
     timeout                          = "160s"
     scaling {
-      min_instance_count = 0
+      # Kept warm: a cold clamd loads its signatures for ~45 s before the first scan.
+      min_instance_count = 1
       max_instance_count = 1
     }
     containers {

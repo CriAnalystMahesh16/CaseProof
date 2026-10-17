@@ -72,8 +72,8 @@ class LLMCache:
             day = datetime.now(timezone.utc).date().isoformat()
             n = db.execute("SELECT count(*) FROM calls WHERE case_id=?", (case_id,)).fetchone()[0]
             daily = db.execute("SELECT count(*) FROM calls WHERE day=?", (day,)).fetchone()[0]
-            if n >= min(8, self.s.llm_max_calls_per_case) or daily >= min(
-                500, self.s.llm_daily_call_cap
+            if n >= min(24, self.s.llm_max_calls_per_case) or daily >= min(
+                5000, self.s.llm_daily_call_cap
             ):
                 raise CallCapError("LLM call cap reached")
             callid = db.execute(

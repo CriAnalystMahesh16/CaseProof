@@ -26,7 +26,11 @@ def install(app):
             route = request.scope.get("route")
             emit(
                 "http_request",
-                severity="ERROR" if status >= 500 else "INFO",
+                # 503 always means "retry shortly" here (bank publishing, virus scan
+                # pending, task retry); only other 5xx are real failures.
+                severity="ERROR"
+                if status >= 500 and status != 503
+                else ("WARNING" if status == 503 else "INFO"),
                 request_id=request_id,
                 route=getattr(route, "path", "unmatched"),
                 method=request.method,

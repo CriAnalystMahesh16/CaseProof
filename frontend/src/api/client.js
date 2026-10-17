@@ -1,5 +1,20 @@
 import { makeCaseView } from "../models/caseView.js";
 import { auth } from "./auth.js";
+// Plain-language text for the codes a visitor can actually meet.
+const MESSAGES = {
+  practice_session_required:
+    "No practice session in this browser yet. Start one (it takes about 30 seconds); the victim and fraud-desk views must be opened in the same browser.",
+  bank_data_preparing:
+    "Your practice bank is still being prepared. Try again in a moment.",
+  evidence_scan_pending_or_rejected:
+    "This file is still being virus-scanned, or it was rejected as unsafe. It opens once it is confirmed clean.",
+  daily_practice_session_limit:
+    "Today's practice sessions are used up. They reset at 05:30 IST; you can still continue an existing session.",
+  invalid_request_or_state:
+    "That could not be accepted. Attach a PNG or JPEG screenshot or photo, or a plain-text file, up to 5 MB.",
+  request_body_limit:
+    "That file is larger than 5 MB. Use a smaller screenshot or photo.",
+};
 export class ApiError extends Error {
   constructor(status, body) {
     const fields = Array.isArray(body.detail)
@@ -9,17 +24,17 @@ export class ApiError extends Error {
       body.error ||
       (typeof body.detail === "string" ? body.detail : undefined) ||
       `Request failed (${status})`;
-    super(
-      status === 403
-        ? "Session expired or this action is not permitted."
+    super(MESSAGES[code] || (status === 403
+        ? "This case belongs to another practice session, or your role cannot do this."
         : status === 404
           ? "This item is unavailable."
           : status === 409
             ? "The case changed. Reload the current assessment before trying again."
-            : code === "bank_data_preparing"
-              ? "Your practice bank is still being prepared. Try again in a moment."
-              : code,
-    );
+            : status === 413
+              ? "That file is larger than 5 MB. Use a smaller screenshot or photo."
+              : status >= 500
+                ? "The service is busy. Please try again in a moment."
+                : code));
     Object.assign(this, {
       status,
       code,
@@ -65,7 +80,8 @@ export async function apiRequest(
       .json()
       .then((data) => data.detail)
       .catch(() => null);
-    if (detail !== "bank_data_preparing") break;
+    if (detail !== "bank_data_preparing" && detail !== "evidence_scan_pending_or_rejected")
+      break;
     const delay =
       Math.min(Number(response.headers.get("Retry-After")) || 3, 10) * 1000;
     await pause(delay, signal);
