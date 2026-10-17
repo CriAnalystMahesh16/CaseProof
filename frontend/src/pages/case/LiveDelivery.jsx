@@ -1,4 +1,5 @@
 import { canRequestRole } from "../../api/auth.js";
+import PacketDocument from "./PacketDocument.jsx";
 import React, { useState } from "react";
 import { Send, FileJson, ArrowDownToLine, Clock } from "lucide-react";
 import {
@@ -146,7 +147,7 @@ export default function Delivery({ view, reload, stale }) {
                         )
                       }
                     >
-                      View original packet
+                      View delivered report
                     </button>
                     <button
                       className="btn sm"
@@ -175,9 +176,7 @@ export default function Delivery({ view, reload, stale }) {
             {!w.historical_deliveries?.length && (
               <Empty>No historical delivery acknowledgement yet.</Empty>
             )}
-            {packet && (
-              <pre className="safe-json">{JSON.stringify(packet, null, 2)}</pre>
-            )}
+            {packet && <PacketDocument packet={packet} />}
           </div>
         </Card>
         <Card>

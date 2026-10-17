@@ -45,6 +45,13 @@ class Complaint(BaseModel):
     fir_reference: str = Field(default="", max_length=120)
 
 
+class PracticeScenario(BaseModel):
+    """How long ago the synthetic scam payment happened (golden hour = 60 minutes)."""
+
+    model_config = ConfigDict(extra="forbid")
+    minutes_ago: int = Field(default=30, ge=5, le=240)
+
+
 class PaymentDecision(BaseModel):
     transaction_id: str
     disputed: bool
@@ -71,15 +78,18 @@ def install(app, o):
     app.state.demo_catalogue = catalogue
 
     @router.post("/v1/victim/demo-session")
-    def new_practice_session(request: Request, response: Response):
+    def new_practice_session(
+        request: Request, response: Response, body: PracticeScenario | None = None
+    ):
         enabled()
         origin = request.headers.get("origin")
         if origin and origin != str(request.base_url).rstrip("/"):
             raise PermissionError("cross-origin session")
-        sid = DemoWorld.claim_ready(o)
+        # A chosen scam timing needs a world generated now; pooled worlds age.
+        sid = DemoWorld.claim_ready(o) if body is None else None
         if sid is None:
             sid = "judge-" + uuid.uuid4().hex[:12]
-            DemoWorld(o, sid).ensure()
+            DemoWorld(o, sid).ensure(minutes_ago=(body or PracticeScenario()).minutes_ago)
         response.set_cookie("cp_demo", sid, httponly=True, samesite="strict", max_age=86400)
         response.delete_cookie("cp_victim")
         return {"session_id": sid, "synthetic": True, "complaints_created": 0}

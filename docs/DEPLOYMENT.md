@@ -34,6 +34,10 @@ Issues found only against real Google services, and fixed:
    60-second circuit, matching the Cloud Tasks retry policy.
 5. New practice sessions publish bank records asynchronously; the frontend now waits on
    `503 bank_data_preparing` instead of showing an error.
+6. Cloud Tasks dispatched one task at a time, so practice-bank publications queued ahead
+   of complaint processing; now 5 concurrent dispatches and up to 3 worker instances.
+7. BigQuery aborts concurrent multi-statement transactions on one table; publication is
+   now a single atomic `MERGE` that still rejects a changed digest.
 
 ## Service topology
 

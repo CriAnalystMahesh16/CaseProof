@@ -1,3 +1,22 @@
+## Live practice scenarios and full UI acceptance on staging — 17 October 2026
+
+| Check | Result |
+| --- | --- |
+| Full browser acceptance against **staging** (`CASEPROOF_BASE_URL=https://8-233-217-230.sslip.io node frontend/scripts/acceptance-browser.mjs`) | **32/32 pass**, 10 accessibility scans with zero violations, zero page errors. Two new complaints with uploaded receipts, processed by `documentai` + `vertex` (live); request, customer reply, reviewer approval, both receivers sent, delivered report opened as a document |
+| Same suite against the local stack | 32/32 pass (one earlier run timed out on a local queue backlog left by load tests; rerun passed) |
+| Backend regression | 350/350 |
+| Frontend unit/component tests | 49/49 |
+
+Changes: testers choose when the scam happened (10 min, 40 min, 2 h ago) and every
+session generates its own bank with distinct names, random amounts and money
+movements timed to that choice; victim customers and the scam payment are marked;
+the delivered report renders as a printable document. Cloud fixes found by running
+the UI suite on staging: one-lane Cloud Tasks dispatch queued bank publications
+ahead of complaints (now 5 lanes, worker up to 3 instances), and BigQuery aborted
+concurrent multi-statement transactions (publication is now a single atomic
+`MERGE`, verified live: duplicate deduplicated, changed digest rejected, 6
+concurrent writes succeeded).
+
 # Google staging validation — 17 October 2026
 
 Deployed at the project owner's instruction to `caseproof-511713`, Mumbai

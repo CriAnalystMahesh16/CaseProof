@@ -58,7 +58,13 @@ class BankNetwork:
             self.ingestion.ingest(BankBatch.model_validate(saved["dataset"]), actor)
             return saved["manifest"]
 
-    def _generate(self, network_id, seed, tenant):
+    def _generate(self, network_id, seed, tenant, minutes_ago=30):
+        """minutes_ago: when the scam payment happened. The whole incident (payments,
+        mule movements, downstream reports) is timed relative to it, so a tester can
+        create a case inside or outside the golden hour."""
+        if not 5 <= minutes_ago <= 240:
+            raise ValueError("scam timing must be 5-240 minutes ago")
+        scale = minutes_ago / 30
         prefix = "SIM-" + hash_json([tenant, network_id, seed])[:10].upper()
         now = datetime.now(timezone(timedelta(hours=5, minutes=30))).replace(
             second=0, microsecond=0
@@ -66,6 +72,10 @@ class BankNetwork:
 
         def stamp(minutes):
             return (now - timedelta(minutes=minutes)).isoformat()
+
+        def incident(minutes):
+            # Default incident timeline (scam at 30 minutes) scaled to the chosen timing.
+            return stamp(minutes * scale)
 
         customer, other, mule, second, layer, atm, shop = [
             prefix + "-" + suffix for suffix in ("C1", "C2", "M1", "M2", "L2", "ATM", "SHOP")
@@ -84,14 +94,14 @@ class BankNetwork:
             )
         ]
 
-        def transaction(suffix, account, receiver, amount, payee, minutes):
+        def transaction(suffix, account, receiver, amount, payee, minutes, at=stamp):
             return dict(
                 txn_id=prefix + "-" + suffix,
                 account=account,
                 counterparty_account=receiver,
                 amount_minor=amount,
                 payee=payee,
-                ts=stamp(minutes),
+                ts=at(minutes),
                 reference="SYNTH-TX-" + prefix + "-" + suffix,
                 direction="debit",
                 channel="UPI",
@@ -107,6 +117,7 @@ class BankNetwork:
                 first_amount,
                 "safe-" + prefix.lower() + "@fictional.invalid",
                 30,
+                incident,
             ),
             transaction(
                 "T2",
@@ -115,6 +126,7 @@ class BankNetwork:
                 extra_amount,
                 "refund-" + prefix.lower() + "@fictional.invalid",
                 20,
+                incident,
             ),
             transaction("OTHER", other, shop, 80000, "grocer@fictional.invalid", 50),
         ]
@@ -157,7 +169,7 @@ class BankNetwork:
         u1 = prefix + "-U1"
         hop = dict(
             txn_id=prefix + "-HOP",
-            ts=stamp(15),
+            ts=incident(15),
             from_account=mule,
             to_account=layer,
             amount_minor=onward,
@@ -167,7 +179,7 @@ class BankNetwork:
         )
         withdrawal = dict(
             txn_id=prefix + "-CASH",
-            ts=stamp(12),
+            ts=incident(12),
             from_account=mule,
             to_account=atm,
             amount_minor=cashout,
@@ -180,7 +192,7 @@ class BankNetwork:
                 update_id=u1,
                 account=mule,
                 reporting_bank="Lotus Demo Bank",
-                reported_at=stamp(5),
+                reported_at=incident(5),
                 credit_received=[edge(t1)],
                 onward_transfers=[hop, withdrawal],
                 balance_minor=first_amount - onward - cashout,
@@ -189,7 +201,7 @@ class BankNetwork:
                 update_id=prefix + "-U2",
                 account=layer,
                 reporting_bank="Tulip Demo Bank",
-                reported_at=stamp(4),
+                reported_at=incident(4),
                 credit_received=[hop],
                 onward_transfers=[],
                 balance_minor=onward,
@@ -198,7 +210,7 @@ class BankNetwork:
                 update_id=prefix + "-U3",
                 account=second,
                 reporting_bank="Tulip Demo Bank",
-                reported_at=stamp(3),
+                reported_at=incident(3),
                 credit_received=[edge(t2)],
                 onward_transfers=[],
                 balance_minor=extra_amount,
@@ -217,7 +229,7 @@ class BankNetwork:
             )
             branch = dict(
                 txn_id=prefix + "-DEEP",
-                ts=stamp(8),
+                ts=incident(8),
                 from_account=layer,
                 to_account=distant,
                 amount_minor=onward // 2,
@@ -232,7 +244,7 @@ class BankNetwork:
                     update_id=prefix + "-U4",
                     account=distant,
                     reporting_bank="Willow Demo Bank",
-                    reported_at=stamp(2),
+                    reported_at=incident(2),
                     credit_received=[branch],
                     onward_transfers=[],
                     balance_minor=branch["amount_minor"],
@@ -255,7 +267,10 @@ class BankNetwork:
             bank="Cedar Demo Bank",
             customers=dataset["customers"],
             customer_account=customer,
-            first_contact=stamp(45),
+            first_contact=incident(45),
+            scam_minutes_ago=minutes_ago,
+            suspicious_txn_id=t1["txn_id"],
+            suspicious_amount_minor=first_amount,
             reported_at=stamp(0),
             initial_statement=statement(t1),
             followup_statement=statement(t2),

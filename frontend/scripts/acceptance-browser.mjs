@@ -8,7 +8,7 @@ const require=createRequire(import.meta.url),out=path.resolve(path.dirname(fileU
 const base=process.env.CASEPROOF_BASE_URL || 'http://127.0.0.1:8080',browser=await chromium.launch({headless:true});
 const context=await browser.newContext({viewport:{width:1440,height:900},reducedMotion:'reduce'}),victim=await context.newPage(),staff=await context.newPage();
 const checks=[],cases=[],audits=[],pageErrors=[],providers=[];
-for(const p of [victim,staff])p.on('pageerror',e=>pageErrors.push(e.message));
+for(const p of [victim,staff]){p.on('pageerror',e=>pageErrors.push(e.message));p.setDefaultTimeout(120000);} // cloud: async bank publication and live model calls
 const check=(name,value=true)=>{assert.ok(value,name);checks.push(name);console.log('PASS',name);};
 async function shot(p,name){await p.screenshot({path:path.join(out,name+'.png'),fullPage:true});}
 async function read(route){const r=await context.request.get(base+route,{headers:{'X-Demo-User':'analyst'}});assert.equal(r.status(),200,route);return r.json();}
@@ -46,8 +46,8 @@ try{
    await settled(cid);await staff.getByRole('button',{name:'Review complete handoff',exact:true}).waitFor({timeout:90000});await staff.getByRole('button',{name:'Review complete handoff',exact:true}).click();await staff.getByRole('button',{name:/Approve revision /}).click();await staff.waitForTimeout(600);const wf=await read(`/v1/cases/${cid}/workflow`);if(wf.approval)break;const close=staff.getByRole('button',{name:'Close',exact:true});if(await close.count())await close.click();if(attempt===4)throw Error('Approval conflicted repeatedly');
   }
   await staff.getByRole('button',{name:'Delivery & follow-up',exact:true}).click();await staff.getByRole('button',{name:'Review & send approved reports',exact:true}).click();await staff.getByRole('button',{name:'Confirm send',exact:true}).click();
-  for(let i=0;i<60;i++){w=await read(`/v1/cases/${cid}/workflow`);if(new Set(w.historical_deliveries.map(d=>d.kind)).size===2)break;await staff.waitForTimeout(1000);}
-  check('Both simulator acknowledgements recorded',new Set(w.historical_deliveries.map(d=>d.kind)).size===2);await shot(staff,`after-delivery-${run}`);
+  for(let i=0;i<240;i++){w=await read(`/v1/cases/${cid}/workflow`);if(new Set(w.historical_deliveries.map(d=>d.kind)).size===2)break;await staff.waitForTimeout(1000);}
+  check('Both simulator acknowledgements recorded',new Set(w.historical_deliveries.map(d=>d.kind)).size===2);await shot(staff,`after-delivery-${run}`);await staff.reload();await staff.getByRole('button',{name:'View delivered report'}).first().click();await staff.getByRole('heading',{name:'Payment scam investigation report'}).waitFor();await staff.getByText('Where the money was traced').waitFor();await shot(staff,`delivered-report-${run}`);check('Delivered report readable as a document');
   await staff.getByRole('combobox',{name:'Staff persona',exact:true}).selectOption('analyst');await staff.getByRole('textbox',{name:'Owner',exact:true}).fill('Cedar fraud follow-up');await staff.getByRole('textbox',{name:'Next action',exact:true}).fill('Track receiving institution responses to the delivered packet.');await staff.getByRole('textbox',{name:'Assignment reason',exact:true}).fill('Delivery acknowledged; investigation remains open.');
   for(let i=0;i<5;i++){await settled(cid);await staff.getByRole('button',{name:'Save follow-up',exact:true}).click();await staff.waitForTimeout(700);w=await read(`/v1/cases/${cid}/workflow`);if(w.followup.version>0)break;}
   check('Owner and awaiting_external follow-up saved',w.followup.version>0&&w.followup.state==='awaiting_external');await staff.reload();await staff.getByText('Current owner: Cedar fraud follow-up',{exact:false}).waitFor({timeout:30000});check('Follow-up survives reload');await axe(staff,'delivery');

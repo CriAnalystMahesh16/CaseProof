@@ -4,7 +4,7 @@ from caseproof.adapters.firestore_casestore import identity
 from caseproof.adapters.sqlite_casestore import ConflictError
 from caseproof.api.bank_contracts import BankBatch
 from local_services.bank_network import BankNetwork
-from local_services.demo_world import BANKS, NAMES
+from local_services.demo_world import BANKS, NAMES, incident
 
 
 class CloudBankNetwork(BankNetwork):
@@ -19,12 +19,13 @@ class CloudBankNetwork(BankNetwork):
             raise KeyError("bank network missing")
         return row["data"]
 
-    def create(self, network_id, seed, actor):
+    def create(self, network_id, seed, actor, minutes_ago=30, position=None):
         if actor.role != "admin" or not self.o.s.demo_mode:
             raise PermissionError("synthetic network administrator required")
         path = "synthetic_networks/" + identity(actor.tenant_id, network_id)
-        generated = self._generate(network_id, seed, actor.tenant_id)
-        index = seed % 6
+        generated = self._generate(network_id, seed, actor.tenant_id, minutes_ago)
+        # Position in the tenant picks distinct names/banks; random seeds may collide.
+        index = seed % 6 if position is None else position % 6
         import json
 
         raw = json.dumps(generated).replace("Lotus Demo Bank", BANKS[1 + index * 2 % 9])
@@ -32,6 +33,8 @@ class CloudBankNetwork(BankNetwork):
         generated = json.loads(raw)
         for position, customer in enumerate(generated["dataset"]["customers"]):
             customer["display_name"] = NAMES[index * 2 + position] + " (synthetic)"
+        # The catalogue reads the manifest; it must carry the same distinct names.
+        generated["manifest"]["customers"] = generated["dataset"]["customers"]
 
         def create(tx):
             row = tx.get(path)
@@ -50,8 +53,14 @@ class CloudBankNetwork(BankNetwork):
         result = self.o.bank_ingestion.ingest(BankBatch.model_validate(saved["dataset"]), actor)
         return {**saved["manifest"], "publication_id": result["publication_id"]}
 
-    def seed_tenant(self, actor):
-        manifests = [self.create(f"PRELOADED-{index}", 36 + index, actor) for index in range(6)]
+    def seed_tenant(self, actor, minutes_ago=30, seeds=None):
+        """seeds: one per network; practice sessions pass fresh random seeds so every
+        visitor gets different amounts and money-movement shapes."""
+        seeds = seeds or [36 + index for index in range(6)]
+        manifests = [
+            self.create(f"PRELOADED-{index}", seed, actor, minutes_ago, index)
+            for index, seed in enumerate(seeds)
+        ]
         return {
             "banks": BANKS,
             "customers": [
@@ -60,6 +69,7 @@ class CloudBankNetwork(BankNetwork):
                     "network_id": m["network_id"],
                     "bank": m["bank"],
                     "publication_id": m["publication_id"],
+                    **incident(m, customer),
                 }
                 for m in manifests
                 for customer in m["customers"]

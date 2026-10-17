@@ -51,6 +51,16 @@ that is not self-explanatory and says what it means and why it exists. It
 auto-advances when the visitor performs the step, resumes after a reload, and can
 jump straight to any analyst chapter. Source: `frontend/src/tour/`.
 
+## Practice scenarios
+
+Every practice session generates its own synthetic bank: distinct customers, varied
+amounts, a scam payment and downstream mule movements. The tester chooses **when
+the scam happened** (10 min, 40 min or 2 h ago), so cases inside and outside the
+golden hour can both be tried; nothing is replayed from a fixed case. The end
+product, the reviewer-approved report sent to the bank case system and the
+cybercrime-report receiver, opens as a readable, printable document under
+**Delivery & follow-up → View delivered report**.
+
 ## Evaluate a new complaint
 
 Follow the [step-by-step demo](docs/DEMO.md): select a synthetic customer, dispute

@@ -11,6 +11,20 @@ from caseproof.adapters.duckdb_bank import DuckDBBank
 from local_services.bank_network import BankNetwork
 from local_services.leadership import write_atomic
 
+
+def incident(manifest, customer):
+    """Mark the customer whose account holds the scam payment (shown to testers)."""
+    if customer["account"] != manifest.get("customer_account"):
+        return {}
+    return {
+        "incident": {
+            "minutes_ago": manifest.get("scam_minutes_ago"),
+            "amount_minor": manifest.get("suspicious_amount_minor"),
+            "txn_id": manifest.get("suspicious_txn_id"),
+        }
+    }
+
+
 BANKS = [
     "Cedar Demo Bank",
     "Lotus Demo Bank",
@@ -51,7 +65,7 @@ class DemoWorld:
             else self.archive / (session_id + ".json")
         )
 
-    def ensure(self):
+    def ensure(self, minutes_ago=30):
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with FileLock(str(self.path) + ".lock"):
             if self.path.exists():
@@ -73,7 +87,7 @@ class DemoWorld:
                             from caseproof.domain.contracts import hash_json
 
                             seed = 100 + int(hash_json([nid, index])[:6], 16) % 9000
-                        saved = network._generate(nid, seed, "demo")
+                        saved = network._generate(nid, seed, "demo", minutes_ago)
                         raw = json.dumps(saved)
                         raw = raw.replace("Lotus Demo Bank", BANKS[1 + index * 2 % 9])
                         raw = raw.replace("Tulip Demo Bank", BANKS[1 + (index * 2 + 1) % 9])
@@ -91,7 +105,14 @@ class DemoWorld:
                             [hash_json(["demo", nid]), "demo", json.dumps(saved)],
                         )
                     for customer in saved["dataset"]["customers"]:
-                        people.append({**customer, "network_id": nid, "bank": BANKS[0]})
+                        people.append(
+                            {
+                                **customer,
+                                "network_id": nid,
+                                "bank": BANKS[0],
+                                **incident(saved["manifest"], customer),
+                            }
+                        )
                     ids.append(nid)
             world = {
                 "version": 1,

@@ -49,11 +49,11 @@ export const STEPS = [
     chapter: "victim",
     go: "/victim/start",
     target: at("practice-session"),
-    title: "Start your own practice session",
+    title: "Generate your own scam",
     body: [
-      "Each visitor gets an isolated fictional bank: fresh customers, real-looking ledger records, and an empty fraud desk queue. Nothing you do here is visible to anyone else.",
+      "Choose when the scam payment happened: 10 or 40 minutes ago is inside the golden hour, 2 hours ago has already missed it. A fresh fictional bank, customers, scam payment and onward money movements are generated now, only for you.",
     ],
-    action: "Click Start a fresh practice session.",
+    action: "Pick a timing, then click Start a fresh practice session.",
   },
   {
     id: "customer",
@@ -61,9 +61,9 @@ export const STEPS = [
     target: at("choose-your-demo-customer"),
     title: "Become the customer",
     body: [
-      "These are synthetic customers of Cedar Demo Bank. Pick anyone: each has recent payments, including the scam payment.",
+      "Customers marked with a suspicious payment are the scam victims; the first one is already selected. Other customers have only normal payments.",
     ],
-    action: "Select a customer, then Continue with selected customer.",
+    action: "Click Continue with selected customer.",
     advance: { route: /^\/victim\/home/ },
   },
   {
@@ -84,7 +84,7 @@ export const STEPS = [
     target: at("report-payments"),
     title: "Choose the scam payment",
     body: [
-      'Select the payment sent to the "safe account", usually the large recent debit to an unfamiliar payee. Other debits stay separate: a possibly related payment is never disputed automatically.',
+      "The scam payment of your scenario is highlighted in red. Select it. Other debits stay separate: a possibly related payment is never disputed automatically.",
     ],
     action: "Select the payment, then Continue.",
     advance: { selector: at("report-narrative") },
@@ -433,7 +433,7 @@ export const STEPS = [
     title: "Report delivery",
     body: [
       "One approved report goes to two destinations: the bank's case system and a national cybercrime-reporting-style receiver (both simulated). Each send is retried until it is acknowledged, and never duplicated.",
-      "Delivered means acknowledged, not that money is held or recovered.",
+      "Delivered means acknowledged, not that money is held or recovered. Open View delivered report below to read the exact report both receivers got, and print it as a PDF.",
     ],
   },
   {

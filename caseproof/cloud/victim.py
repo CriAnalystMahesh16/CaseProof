@@ -9,7 +9,7 @@ from fastapi import Cookie, Depends, File, Form, HTTPException, Request, Respons
 from caseproof.adapters.bank_factory import bank_services
 from caseproof.adapters.firestore_casestore import identity
 from caseproof.adapters.sqlite_casestore import ConflictError
-from caseproof.api.victim import Complaint, PaymentDecision, Session
+from caseproof.api.victim import Complaint, PaymentDecision, PracticeScenario, Session
 from caseproof.cloud.bank_network import CloudBankNetwork
 from caseproof.domain.contracts import CaseSnapshot, hash_json, now
 
@@ -90,8 +90,9 @@ def install(app, o):
         return catalogue(request)["catalogue"]
 
     @app.post("/v1/victim/demo-session")
-    def new_session(request: Request, response: Response):
+    def new_session(request: Request, response: Response, body: PracticeScenario | None = None):
         same_origin(request)
+        scenario = body or PracticeScenario()
         from datetime import datetime, timezone
 
         day = datetime.now(timezone.utc).date().isoformat()
@@ -107,7 +108,11 @@ def install(app, o):
         docs.transact(reserve)
         token = secrets.token_urlsafe(32)
         tenant = "judge-" + hash_json(token)[:12]
-        generated = CloudBankNetwork(o).seed_tenant(SimpleNamespace(role="admin", tenant_id=tenant))
+        generated = CloudBankNetwork(o).seed_tenant(
+            SimpleNamespace(role="admin", tenant_id=tenant),
+            minutes_ago=scenario.minutes_ago,
+            seeds=[secrets.randbelow(9000) + 1000 for _ in range(6)],
+        )
 
         def create(tx):
             tx.set(

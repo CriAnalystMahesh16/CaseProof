@@ -802,3 +802,38 @@
 .live-graph .trail-node .foot .badge.ok {
   color: var(--ok);
 }
+
+/* Practice scam set-up and victim hints */
+.scam-timing { border: 0; padding: 0; margin: 0; display: grid; gap: 8px; }
+.scam-timing legend { font-weight: 600; margin-bottom: 8px; }
+.scam-timing .timing-option { display: flex; flex-direction: row; justify-content: flex-start; gap: 10px; align-items: flex-start; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r); cursor: pointer; background: var(--surface); }
+.scam-timing .timing-option.on { border-color: var(--brand); background: var(--brand-soft); }
+.scam-timing .timing-option input { width: auto; flex: 0 0 auto; margin: 3px 0 0; }
+.scam-timing .timing-option span { display: flex; flex-direction: column; text-align: left; }
+.timing-option small { color: var(--ink-3); }
+.incident-hint { display: block; margin-top: 4px; color: var(--crit); font-weight: 600; }
+.payment-row.suspicious { border-color: var(--crit-line); background: var(--crit-soft); }
+.other-customers { margin-top: 12px; }
+.other-customers summary { cursor: pointer; color: var(--ink-2); margin-bottom: 8px; }
+
+/* Delivered report document */
+.packet-doc { margin-top: 14px; padding: 20px 22px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); }
+.packet-head { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; }
+.packet-head h2 { margin: 4px 0; font-family: var(--serif); }
+.packet-decision { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 14px 0; }
+.packet-decision div { padding: 10px 12px; border-radius: var(--r); background: var(--surface-2); border: 1px solid var(--line); display: flex; flex-direction: column; }
+.packet-decision small { color: var(--ink-3); }
+.packet-reason { padding: 10px 12px; border-left: 3px solid var(--brand); background: var(--brand-soft); }
+.packet-doc h3 { margin: 22px 0 8px; }
+.packet-table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; }
+.packet-table caption { text-align: left; font-weight: 600; padding-bottom: 6px; }
+.packet-table th, .packet-table td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.packet-table .num { text-align: right; white-space: nowrap; }
+.packet-gaps { padding: 10px 12px; border-radius: var(--r); background: var(--warn-soft); border: 1px solid var(--warn-line); }
+.packet-foot { margin-top: 16px; font-size: 12px; }
+@media print {
+  body * { visibility: hidden; }
+  .packet-doc, .packet-doc * { visibility: visible; }
+  .packet-doc { position: absolute; inset: 0; border: 0; }
+  .packet-actions { display: none; }
+}

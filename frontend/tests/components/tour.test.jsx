@@ -87,7 +87,7 @@ it("opens at the golden-hour introduction and moves forward and back", () => {
   expect(screen.getByRole("dialog")).toBeTruthy();
   expect(screen.getByText("Welcome: the golden hour")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: /Next/ }));
-  expect(screen.getByText("Start your own practice session")).toBeTruthy();
+  expect(screen.getByText("Generate your own scam")).toBeTruthy();
   expect(location.hash).toBe("#/victim/start");
   fireEvent.click(screen.getByRole("button", { name: /Back/ }));
   expect(screen.getByText("Welcome: the golden hour")).toBeTruthy();

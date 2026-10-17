@@ -71,3 +71,23 @@ def test_concurrent_pool_fillers_never_exceed_the_pool_size(tmp_path):
         thread.join()
     DemoWorld.fill_pool(o, new_id)  # A later round tops up to, not past, the size.
     assert len(list((o.s.data_dir / "demo_worlds" / "ready").glob("judge-*"))) == 2
+
+
+def test_chosen_scam_timing_shapes_a_fresh_world_and_marks_the_victim(tmp_path):
+    from datetime import datetime, timezone
+
+    app = create_app(settings(tmp_path))
+    with TestClient(app) as visitor:
+        made = visitor.post("/v1/victim/demo-session", json={"minutes_ago": 10})
+        assert made.status_code == 200
+        customers = visitor.get("/v1/victim/demo-customers").json()["customers"]
+        victims = [c for c in customers if c.get("incident")]
+        assert victims and all(c["incident"]["minutes_ago"] == 10 for c in victims)
+        assert len({c["display_name"] for c in customers}) == len(customers)
+        victim = victims[0]
+        visitor.post("/v1/victim/sessions", json={"customer_id": victim["account"]})
+        me = visitor.get("/v1/victim/me").json()
+        scam = next(t for t in me["transactions"] if t["txn_id"] == victim["incident"]["txn_id"])
+        age = datetime.now(timezone.utc) - datetime.fromisoformat(scam["ts"])
+        assert 9 * 60 <= age.total_seconds() <= 12 * 60
+        assert visitor.post("/v1/victim/demo-session", json={"minutes_ago": 2}).status_code == 422

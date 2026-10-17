@@ -101,6 +101,34 @@ export default function Victim({ route }) {
     </div>
   );
 }
+const SCAM_TIMINGS = [
+  [10, "10 minutes ago", "Inside the golden hour, about 50 minutes left"],
+  [40, "40 minutes ago", "Inside the golden hour, about 20 minutes left"],
+  [120, "2 hours ago", "Golden hour already missed"],
+];
+function CustomerOption({ person, selected, busy, onSelect }) {
+  const incident = person.incident;
+  return (
+    <button
+      disabled={busy}
+      className={"customer-option " + (selected ? "selected" : "")}
+      onClick={onSelect}
+    >
+      <span className="avatar">{person.display_name?.slice(0, 2) || "CP"}</span>
+      <div>
+        <b>{person.display_name}</b>
+        <small className="mono muted">{person.account}</small>
+        {incident && (
+          <small className="incident-hint">
+            Suspicious {formatMinor(incident.amount_minor)} payment ·{" "}
+            {incident.minutes_ago} min ago
+          </small>
+        )}
+      </div>
+      {selected && <Check size={16} />}
+    </button>
+  );
+}
 function Start() {
   const resource = useResource(
       "customers",
@@ -109,49 +137,112 @@ function Start() {
     ),
     action = useAction(resource.reload);
   const [selected, setSelected] = useState(""),
-    [catalogue, setCatalogue] = useState(null);
+    [catalogue, setCatalogue] = useState(null),
+    [timing, setTiming] = useState(10);
+  const customers = (catalogue || resource.data)?.customers || [];
+  const victims = customers.filter((p) => p.incident),
+    others = customers.filter((p) => !p.incident);
+  const option = (p) => (
+    <CustomerOption
+      key={p.account}
+      person={p}
+      busy={action.busy}
+      selected={selected === p.account}
+      onSelect={() => setSelected(p.account)}
+    />
+  );
   return (
     <>
       <div className="victim-title">
         <div className="eyebrow">Cedar Demo Bank</div>
         <h1>Let's take the next step.</h1>
         <p>
-          Use a fictional customer to report a payment scam. Your account and
-          payments are already prepared.
+          Play a customer who has just been scammed. A fresh fictional bank,
+          scam payment and money trail are generated for you, timed the way you
+          choose.
         </p>
       </div>
       <Card>
         <CardH
+          title="Start a live practice scam"
+          sub="Everything is generated now for this session only"
+        />
+        <div className="card-b col gap12">
+          <fieldset className="scam-timing">
+            <legend>When did the scam payment happen?</legend>
+            {SCAM_TIMINGS.map(([minutes, title, hint]) => (
+              <label
+                key={minutes}
+                className={"timing-option " + (timing === minutes ? "on" : "")}
+              >
+                <input
+                  type="radio"
+                  name="scam-timing"
+                  checked={timing === minutes}
+                  onChange={() => setTiming(minutes)}
+                />
+                <span>
+                  <b>{title}</b>
+                  <small>{hint}</small>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+          <button
+            className="btn primary"
+            data-tour="practice-session"
+            disabled={action.busy}
+            onClick={() =>
+              action
+                .run(async () => {
+                  await post("/v1/victim/demo-session", {
+                    minutes_ago: timing,
+                  });
+                  const next = await apiRequest("/v1/victim/demo-customers");
+                  setCatalogue(next);
+                  setSelected(
+                    next.customers.find((p) => p.incident)?.account || "",
+                  );
+                })
+                .catch(() => {})
+            }
+          >
+            {action.busy
+              ? "Generating your bank and scam…"
+              : "Start a fresh practice session"}
+          </button>
+        </div>
+      </Card>
+      <Card>
+        <CardH
           title="Choose your demo customer"
-          sub="Account access comes from this scoped demo session"
+          sub="Customers marked with a suspicious payment are the scam victims"
         />
         <div className="card-b">
           <ErrorBanner error={resource.error || action.error} />
           {resource.loading ? (
             <Loading />
           ) : (
-            <div className="customer-grid">
-              {(catalogue || resource.data)?.customers.map((p) => (
-                <button
-                  key={p.account}
-                  disabled={action.busy}
-                  className={
-                    "customer-option " +
-                    (selected === p.account ? "selected" : "")
-                  }
-                  onClick={() => setSelected(p.account)}
-                >
-                  <span className="avatar">
-                    {p.display_name?.slice(0, 2) || "CP"}
-                  </span>
-                  <div>
-                    <b>{p.display_name}</b>
-                    <small className="mono muted">{p.account}</small>
-                  </div>
-                  {selected === p.account && <Check size={16} />}
-                </button>
-              ))}
-            </div>
+            <>
+              {!victims.length && (
+                <p className="muted">
+                  Start a fresh practice session above to generate a scam
+                  victim. Until then these customers have only normal payments.
+                </p>
+              )}
+              <div className="customer-grid">
+                {(victims.length ? victims : others).map(option)}
+              </div>
+              {victims.length > 0 && others.length > 0 && (
+                <details className="other-customers">
+                  <summary>
+                    Other customers without a reported incident ({others.length}
+                    )
+                  </summary>
+                  <div className="customer-grid">{others.map(option)}</div>
+                </details>
+              )}
+            </>
           )}
           <button
             className="btn primary lg full"
@@ -161,6 +252,14 @@ function Start() {
               action
                 .run(async () => {
                   await post("/v1/victim/sessions", { customer_id: selected });
+                  try {
+                    const txn = customers.find((p) => p.account === selected)
+                      ?.incident?.txn_id;
+                    if (txn) sessionStorage.setItem("cp-incident-txn", txn);
+                    else sessionStorage.removeItem("cp-incident-txn");
+                  } catch {
+                    /* hint only */
+                  }
                   go("/victim/home");
                 })
                 .catch(() => {})
@@ -169,43 +268,20 @@ function Start() {
             Continue with selected customer <ArrowRight size={15} />
           </button>
           <div className="hr" />
-          <div className="row gap8 wrap">
-            <button
-              className="btn"
-              disabled={action.busy}
-              onClick={() =>
-                action
-                  .run(async () => {
-                    await apiRequest("/v1/victim/me");
-                    go("/victim/home");
-                  })
-                  .catch(() => {})
-              }
-            >
-              Continue current session
-            </button>
-            <button
-              className="btn ghost"
-              data-tour="practice-session"
-              disabled={action.busy}
-              onClick={() =>
-                action
-                  .run(async () => {
-                    await post("/v1/victim/demo-session");
-                    setSelected("");
-                    const next = await apiRequest("/v1/victim/demo-customers");
-                    setCatalogue(next);
-                  })
-                  .catch(() => {})
-              }
-            >
-              Start a fresh practice session
-            </button>
-          </div>
-          <p className="muted">
-            A fresh practice session changes this browser's active fictional
-            catalogue. Previous reports stay preserved.
-          </p>
+          <button
+            className="btn"
+            disabled={action.busy}
+            onClick={() =>
+              action
+                .run(async () => {
+                  await apiRequest("/v1/victim/me");
+                  go("/victim/home");
+                })
+                .catch(() => {})
+            }
+          >
+            Continue current session
+          </button>
         </div>
       </Card>
     </>
@@ -230,7 +306,10 @@ function SessionError({ resource }) {
 }
 function Home() {
   const resource = useMe();
-  if (resource.loading) return <Loading />;
+  if (resource.loading)
+    return (
+      <Loading message="Opening your account. A new practice bank publishes its records first, which can take up to a minute." />
+    );
   if (!resource.data) return <SessionError resource={resource} />;
   const me = resource.data;
   return (
@@ -298,9 +377,18 @@ function Home() {
     </>
   );
 }
+// The generated scam payment for the chosen customer, remembered from the start screen.
+const incidentTxn = () => {
+  try {
+    return sessionStorage.getItem("cp-incident-txn");
+  } catch {
+    return null;
+  }
+};
 function Payment({ t, children }) {
+  const suspicious = t.txn_id === incidentTxn();
   return (
-    <div className="payment-row">
+    <div className={"payment-row" + (suspicious ? " suspicious" : "")}>
       <span className="payment-icon">
         <Landmark size={17} />
       </span>
@@ -308,6 +396,11 @@ function Payment({ t, children }) {
         <b>{t.payee_vpa || t.to_account || t.beneficiary || t.txn_id}</b>
         <small className="muted">{time(t.ts)}</small>
         <small className="mono muted">{t.reference || t.txn_id}</small>
+        {suspicious && (
+          <small className="incident-hint">
+            The scam payment in this practice scenario
+          </small>
+        )}
       </div>
       <b className="num">{formatMinor(t.amount_minor)}</b>
       {children}

@@ -43,12 +43,12 @@ export function ErrorBanner({ error, onRetry }) {
     </div>
   ) : null;
 }
-export function Loading() {
+export function Loading({ message = "Loading current records…" }) {
   return (
     <div className="loading-state" role="status">
       <span className="skel" />
       <span className="skel" />
-      <span className="muted">Loading current records…</span>
+      <span className="muted">{message}</span>
     </div>
   );
 }

@@ -136,7 +136,7 @@ resource "google_cloud_run_v2_service" "backend" {
     max_instance_request_concurrency = each.key == "worker" ? 1 : 8
     scaling {
       min_instance_count = 0
-      max_instance_count = each.key == "api" ? 2 : 1
+      max_instance_count = each.key == "simulator" ? 1 : each.key == "worker" ? 3 : 2
     }
     containers {
       image   = var.application_image
@@ -227,9 +227,11 @@ resource "google_cloud_tasks_queue" "processing" {
   name          = "caseproof-processing"
   location      = var.region
   desired_state = var.dispatch_enabled ? "RUNNING" : "PAUSED"
+  # Parallel lanes so practice-bank publications never queue ahead of a complaint;
+  # jobs stay safe through per-case leases and revision fencing.
   rate_limits {
-    max_dispatches_per_second = 1
-    max_concurrent_dispatches = 1
+    max_dispatches_per_second = 5
+    max_concurrent_dispatches = 5
   }
   retry_config {
     # Six attempts over ~12 minutes: outlasts transient Vertex 429s (MAX_JOB_ATTEMPTS).

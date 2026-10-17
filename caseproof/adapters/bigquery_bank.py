@@ -79,19 +79,27 @@ class BigQuery:
         # Firestore reserves immutable identity; repeated SQL publication is deduplicated.
         extra_columns = ",reported_at" if table == "downstream_reports" else ""
         extra_values = ",TIMESTAMP(JSON_VALUE(@payload,'$.reported_at'))" if extra_columns else ""
-        self.query(
-            f"""
-            BEGIN TRANSACTION;
-            ASSERT NOT EXISTS(SELECT 1 FROM {target}
-                WHERE tenant=@tenant AND id=@id AND digest!=@digest) AS 'immutable batch';
-            MERGE {target} t USING (SELECT @tenant tenant,@id id) s
+        # One MERGE statement: atomic by itself, and BigQuery queues concurrent DML on
+        # a table instead of aborting it the way multi-statement transactions are.
+        # A different digest for an existing id raises, keeping records immutable.
+        statement = f"""
+            MERGE {target} t USING (SELECT @tenant tenant,@id id,@digest digest) s
             ON t.tenant=s.tenant AND t.id=s.id
+            WHEN MATCHED AND t.digest!=s.digest THEN
+                UPDATE SET digest=ERROR('immutable batch')
             WHEN NOT MATCHED THEN INSERT(tenant,id,digest,payload,received_at{extra_columns})
-            VALUES(@tenant,@id,@digest,@payload,CURRENT_TIMESTAMP(){extra_values});
-            COMMIT TRANSACTION;
-        """,
-            {"tenant": tenant, "id": record_id, "digest": digest, "payload": payload},
-        )
+            VALUES(@tenant,@id,@digest,@payload,CURRENT_TIMESTAMP(){extra_values})
+        """
+        parameters = {"tenant": tenant, "id": record_id, "digest": digest, "payload": payload}
+        for attempt in range(4):
+            try:
+                self.query(statement, parameters)
+                return
+            except Exception as error:  # requests HTTPError carries BigQuery's message
+                body = getattr(getattr(error, "response", None), "text", "") or ""
+                if "concurrent update" not in body or attempt == 3:
+                    raise
+                time.sleep(1 + attempt * 2)
 
 
 class BigQueryBank:

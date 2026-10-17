@@ -328,7 +328,7 @@ button.full {
 label {
   line-height: 1.5;
 }
-label > input:not([type="checkbox"]):not([type="range"]),
+label > input:not([type="checkbox"]):not([type="range"]):not([type="radio"]),
 label > textarea,
 label > select {
   display: block;

@@ -383,3 +383,20 @@ def test_practice_session_daily_cap_is_configurable(tmp_path, monkeypatch):
     with TestClient(create_app(o.s, o), base_url="https://caseproof.test") as visitor:
         codes = [visitor.post("/v1/victim/demo-session").status_code for _ in range(3)]
     assert codes == [200, 200, 429]
+
+
+def test_cloud_practice_sessions_are_fresh_named_and_timed(tmp_path, monkeypatch):
+    o, tasks, receiver, clean = runtime(tmp_path, monkeypatch)
+    with TestClient(create_app(o.s, o), base_url="https://caseproof.test") as visitor:
+        assert visitor.post("/v1/victim/demo-session", json={"minutes_ago": 90}).status_code == 200
+        first = visitor.get("/v1/victim/demo-customers").json()["customers"]
+        assert visitor.post("/v1/victim/demo-session", json={"minutes_ago": 90}).status_code == 200
+        second = visitor.get("/v1/victim/demo-customers").json()["customers"]
+    names = [c["display_name"] for c in first]
+    assert len(set(names)) == len(names) and "Maya Synthetic" not in names
+    victims = [c for c in first if c.get("incident")]
+    assert len(victims) == 6 and all(c["incident"]["minutes_ago"] == 90 for c in victims)
+    amounts = lambda cs: [c["incident"]["amount_minor"] for c in cs if c.get("incident")]  # noqa: E731
+    assert amounts(first) != amounts(second) or [c["account"] for c in first] != [
+        c["account"] for c in second
+    ]
