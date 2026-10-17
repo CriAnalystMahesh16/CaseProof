@@ -28,7 +28,58 @@ export const time = (value) =>
         hour12: false,
       }).format(new Date(value)) + " IST"
     : "Unknown time";
+// Plain-language names for internal codes; judges and analysts read these.
+const PLAIN = {
+  REVIEW_REQUIRED: "Needs analyst review",
+  COMPLETE_CANDIDATE: "Ready for reviewer sign-off",
+  ESCALATE_CANDIDATE: "Escalate now",
+  needs_attention: "Needs attention",
+  needs_analysis: "Needs analysis",
+  ready_for_review: "Ready for review",
+  processing: "Processing",
+  queued: "Queued",
+  running: "Processing",
+  done: "Assessed",
+  failed: "Needs retry",
+  approved: "Approved",
+  delivered: "Delivered",
+  amount: "Amount",
+  currency: "Currency",
+  date: "Payment date",
+  txn_datetime: "Payment time",
+  payee_vpa: "Payee UPI ID",
+  transaction_reference: "Transaction reference (UTR)",
+  ledger_coverage: "Bank records up to date",
+  bank_verified: "Confirmed in bank records",
+  deception_account: "How the scam happened",
+  all_transfers_accounted: "Every disputed transfer accounted for",
+  readable_receipt: "Readable payment receipt",
+  confirmed_disputed: "Confirmed disputed",
+  awaiting_confirmation: "Awaiting customer confirmation",
+  source_supported: "Seen on evidence",
+  reported: "Reported by customer",
+  conflicted: "Conflicting",
+  unresolved: "Unresolved",
+  own_bank: "Our bank records",
+  downstream_bank: "Receiving bank report",
+  victim: "Customer",
+  human_decision: "Reviewer decision",
+  recoverable: "Still in an account",
+  left_system: "Left the banking system",
+  unaccounted: "Not yet traced",
+  customer_statement: "Customer statement",
+  scam_instruction: "Scammer's instruction",
+  caller_number: "Caller number",
+  caller_claimed_identity: "Caller claimed to be",
+  deception_channel: "Contact channel",
+  embedded_instruction: "Suspicious instruction in evidence",
+  bank_website: "Bank website",
+  fraud_analyst: "Fraud analyst",
+  bank_data_operations: "Bank data team",
+  reviewer: "Reviewer",
+};
 export const label = (value) =>
+  PLAIN[value] ??
   String(value ?? "Unknown")
     .replaceAll("_", " ")
     .toLowerCase();

@@ -141,7 +141,8 @@ resource "google_cloud_run_v2_service" "backend" {
     timeout                          = "240s"
     max_instance_request_concurrency = each.key == "worker" ? 1 : 8
     scaling {
-      min_instance_count = 0
+      # API and worker stay warm: a cold start added ~30 s to a judge's first session.
+      min_instance_count = contains(["api", "worker"], each.key) ? 1 : 0
       max_instance_count = each.key == "simulator" ? 1 : each.key == "worker" ? 3 : 2
     }
     containers {

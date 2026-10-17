@@ -503,7 +503,7 @@ function Case({ caseId, tab }) {
               </div>
               <div className="muted">
                 {view.workflow.customer_account} ·{" "}
-                {label(view.workflow.intake_channel)} · assessment r
+                {label(view.workflow.intake_channel)} · version{" "}
                 {view.identity.revision}
               </div>
             </div>
@@ -516,12 +516,12 @@ function Case({ caseId, tab }) {
                 <small>Additional candidate</small>
                 <b className="num">{formatMinor(view.amounts.candidate)}</b>
               </div>
-              <div className="stat">
-                <small>Snapshot</small>
-                <b className="mono">
-                  r{view.identity.revision}{" "}
-                  <small>{view.identity.digest?.slice(0, 8)}</small>
-                </b>
+              <div
+                className="stat"
+                title={"Tamper-evident fingerprint: " + view.identity.digest}
+              >
+                <small>Case version</small>
+                <b className="num">v{view.identity.revision}</b>
               </div>
             </div>
           </div>

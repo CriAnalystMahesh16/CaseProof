@@ -272,6 +272,21 @@ def create_app(settings, orchestrator=None, *, worker=False):
         snap = o.store.get(cid, revision)
         return case_summary(o, snap, build_brief(snap, o.store.approval(cid, snap.revision)))
 
+    @app.post("/v1/cases/{cid}/genai/investigate")
+    def genai_investigate(cid: str, actor=Depends(identity)):
+        from caseproof.adapters.bank_factory import bank_services
+        from caseproof.genai import investigate
+
+        authorised(cid, actor)
+        snap, meta = o.store.get(cid), o.store.metadata(cid)
+        bank = bank_services(o, meta["tenant_id"])[0]
+        bank.exclude_case_id = cid
+        if snap.clock:
+            bank.observation_as_of = snap.clock.as_of
+        return investigate(
+            o, snap, bank, meta.get("customer_account", ""), meta.get("reported_at", "")
+        )
+
     @app.get("/v1/cases/{cid}/artifacts/{aid}/genai-read")
     def genai_read(cid: str, aid: str, actor=Depends(identity)):
         from caseproof.genai import read_evidence

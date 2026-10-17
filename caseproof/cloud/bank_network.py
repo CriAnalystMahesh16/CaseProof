@@ -98,19 +98,74 @@ class CloudBankNetwork(BankNetwork):
             for cover in batch["coverage"]:
                 cover.update(as_of=observed, end=observed)
             self.o.bank_ingestion.ingest(BankBatch.model_validate(batch), actor)
-            reports += [
-                dict(
-                    update_id=r["update_id"] + suffix,
-                    account=r["account"],
-                    reporting_bank=r["reporting_bank"],
-                    reported_at=observed,
-                    balance_minor=r["balance_minor"],
-                    credit_received=[],
-                    onward_transfers=[],
+            due = cash_outs(saved, observed)
+            refreshed = []
+            for r in reports:
+                update_id = r["update_id"] + suffix
+                moved = [
+                    {**w, "source": "cfcfrms_update:" + update_id}
+                    for w in due
+                    if w["from_account"] == r["account"]
+                ]
+                refreshed.append(
+                    dict(
+                        update_id=update_id,
+                        account=r["account"],
+                        reporting_bank=r["reporting_bank"],
+                        reported_at=observed,
+                        balance_minor=r["balance_minor"] - sum(w["amount_minor"] for w in moved),
+                        credit_received=[],
+                        onward_transfers=moved,
+                    )
                 )
-                for r in reports
-            ]
+            reports += refreshed
         return {
             "publications": [self.o.bank_ingestion.downstream(r, actor) for r in reports],
             "synthetic": True,
         }
+
+
+# Mules cash out while the bank waits: the scenario schedules ATM withdrawals at
+# fixed minutes after the scam debit, and a refresh reports only those already due.
+CASH_OUT_PLAN = ((0, 20, 2), (1, 30, 2), (0, 45, 1), (1, 55, 1))  # (report, minute, 1/n)
+
+
+def cash_outs(saved, observed):
+    from datetime import datetime, timedelta
+
+    reports = saved["reports"]
+    base = reports[0]
+    atm = next(
+        (t["to_account"] for t in base["onward_transfers"] if t.get("channel") == "ATM"), None
+    )
+    scam = next((t for t in saved["dataset"]["transactions"] if t["txn_id"].endswith("-T1")), None)
+    if not atm or not scam:
+        return []
+    start, now = datetime.fromisoformat(scam["ts"]), datetime.fromisoformat(observed)
+    remaining = {i: reports[i]["balance_minor"] for i in (0, 1) if i < len(reports)}
+    out = []
+    for step, (index, minute, share) in enumerate(CASH_OUT_PLAN, 1):
+        if index not in remaining:
+            continue
+        flows = reports[index]["credit_received"] + reports[index]["onward_transfers"]
+        latest = max((datetime.fromisoformat(t["ts"]) for t in flows), default=start)
+        # Never before the money reached this account: scenarios scale flow times.
+        at = max(start + timedelta(minutes=minute), latest + timedelta(minutes=1))
+        amount = remaining[index] // share
+        remaining[index] -= amount
+        if at > now or amount <= 0:
+            continue
+        account = reports[index]["account"]
+        out.append(
+            dict(
+                txn_id=f"{account}-ATM{step}",
+                ts=at.isoformat(),
+                from_account=account,
+                to_account=atm,
+                amount_minor=amount,
+                channel="ATM",
+                reference=f"{account}-ATM{step}-REF",
+                source="",
+            )
+        )
+    return out

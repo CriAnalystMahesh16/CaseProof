@@ -105,3 +105,44 @@ How it was tested
 | Agentic investigation (Gemini function calling to look up transactions / linked complaints) | Implemented, **switched off** (`agentic_investigate=False`) | `caseproof/adapters/investigation_tools.py` |
 | Investigation brief, requests, readiness, report, money trail | No: deterministic code and templates | By design: "rules decide" |
 | Victim-facing language, translation, report drafting | No | |
+
+## Round 2 review (18 October, after commit 896a8a9) — notes only
+
+Measured on staging: practice bank ready in 53 s for a lone visitor after idle, and 10–27 s
+for four parallel visitors. Each session publishes about 34 BigQuery batches at ~2.7 s each
+through the shared five-lane queue; the API, worker and simulator start cold (min 0).
+
+### Still possible errors / friction
+- R1 Cold starts: API, worker, simulator and frontend scale to zero; the first visitor after idle waits longest (53 s measured).
+- R2 Bank set-up time varies from 10 to 53 s and shares the queue with complaint processing; past 120 s the client gives up and shows an error.
+- R3 Cloud Armor allows 30 victim POSTs per minute **per IP**: judges behind one venue NAT or office Wi-Fi can hit 429.
+- R4 The Gemini summary card silently disappears on a Gemini 429 or cap hit; a single 429 makes that API instance skip Gemini for 60 s (circuit file); a 403/404 skips it for 24 h.
+- R5 The summary is regenerated for every changed revision; summary, evidence reading and retries share one 24-call budget per case, so a long demo can exhaust it.
+- R6 If every summary sentence fails verification, the card renders with an empty list.
+- R7 Document AI read timeouts (45 s) under concurrency: a case can take 2–3 min.
+- R8 The shared daily counters (`demo_limits/sessions-<day>`, `model_limits/day-<day>`) are single Firestore documents updated in transactions: contention under load (the Firestore 409 seen) and a scalability ceiling.
+- R9 The victim and the analyst must use the same browser; phone plus laptop still yields "No practice session".
+- R10 sslip.io may be blocked or flagged by corporate filters, and looks untrustworthy.
+- R11 iPhone photos default to HEIC, which is rejected (PNG/JPEG only); PDFs are rejected too.
+- R12 Only transaction index 2 has an image receipt (`victim.py` receipt endpoint); disputing the ₹11,000 second debit downloads a JSON text "receipt".
+
+### Not yet tested end to end
+The full 32-step acceptance suite and the tour after this deploy; analyst sends a request →
+victim answers through the customer link in the UI; reviewer rejects or returns a case;
+a second complaint, or a second customer, in the same session; the 120-minute (elapsed)
+scenario in the UI; a refresh or back button mid-report; session expiry; Safari and
+Firefox; keyboard-only and screen-reader use; slow 3G; the analyst view on a phone; a
+long narrative or emoji; Hindi-script narrative through the UI.
+
+### Synthetic-data effects
+Visible synthetic identifiers (`SIM-…`, `SYNTH-TX-…`, `@fictional.invalid`, "CEDAR DEMO BANK -
+SYNTHETIC") flow into the Gemini text; identical scam template for every victim; clean typed
+receipts (OCR never struggles); static money trail; a fixed 25-minute grocery payment;
+overlap detection missing in the cloud, so "linked complaints" is always empty; the golden-hour
+clock is real time, so a slow judge on the 10-minute scenario sees "elapsed".
+
+### Presentation weaknesses
+Bank jargon on screen (disposition, REVIEW_REQUIRED, ledger_coverage, revision r4, digests);
+switching personas through a "Demo identity" dropdown; no before/after view of the analyst's
+saved effort; spinners during 10–53 s waits; agentic investigation still off; accessibility
+not audited; README, deck and video not done.

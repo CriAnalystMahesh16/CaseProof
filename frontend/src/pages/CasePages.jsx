@@ -36,6 +36,7 @@ import MoneyTrail from "./case/LiveTrail.jsx";
 import Review from "./case/LiveReview.jsx";
 import Delivery from "./case/LiveDelivery.jsx";
 import { GeminiSummary } from "../components/Gemini.jsx";
+import { WorkDone, GeminiInvestigator } from "../components/AnalystWork.jsx";
 
 export default function CasePages({ view, tab, stale, reload }) {
   const props = { view, reload, stale };
@@ -77,6 +78,10 @@ function Overview({ view }) {
   return (
     <>
     <GeminiSummary caseId={s.case_id} revision={s.revision} />
+    <div className="g2 overview-ai">
+      <WorkDone view={view} />
+      <GeminiInvestigator caseId={s.case_id} />
+    </div>
     <div className="g3 overview-grid">
       <Card>
         <CardH

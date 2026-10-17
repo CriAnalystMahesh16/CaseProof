@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { IntakeHelper } from "../../components/Gemini.jsx";
+import BankBuilder, { waitForBank } from "./BankBuilder.jsx";
 import {
   ArrowRight,
   ArrowLeft,
@@ -163,7 +164,8 @@ function Start() {
     action = useAction(resource.reload);
   const [selected, setSelected] = useState(""),
     [catalogue, setCatalogue] = useState(null),
-    [timing, setTiming] = useState(10);
+    [timing, setTiming] = useState(10),
+    [build, setBuild] = useState(null);
   const customers = (catalogue || resource.data)?.customers || [];
   const victims = customers.filter((p) => p.incident),
     others = customers.filter((p) => !p.incident);
@@ -185,6 +187,11 @@ function Start() {
           Play a customer who has just been scammed. A fresh fictional bank,
           scam payment and money trail are generated for you, timed the way you
           choose.
+        </p>
+        <p className="banner info same-browser">
+          Generating your practice bank takes about 20 seconds. Keep using this
+          browser: the fraud-desk view of your report opens here too, because
+          it belongs to this browser's practice session.
         </p>
       </div>
       {(catalogue || resource.data)?.version < 5 && (
@@ -228,14 +235,38 @@ function Start() {
             onClick={() =>
               action
                 .run(async () => {
-                  await post("/v1/victim/demo-session", {
-                    minutes_ago: timing,
-                  });
-                  const next = await apiRequest("/v1/victim/demo-customers");
-                  setCatalogue(next);
-                  setSelected(
-                    next.customers.find((p) => p.incident)?.account || "",
+                  setBuild({ stage: 0 });
+                  const ticks = [1, 2].map((stage, i) =>
+                    setTimeout(
+                      () => setBuild((b) => (b ? { ...b, stage } : b)),
+                      1400 * (i + 1),
+                    ),
                   );
+                  try {
+                    await post("/v1/victim/demo-session", {
+                      minutes_ago: timing,
+                    });
+                    ticks.forEach(clearTimeout);
+                    setBuild({ stage: 3, published: 0, total: 6 });
+                    await waitForBank((p) =>
+                      setBuild({
+                        stage: 3,
+                        published: p.published,
+                        total: p.total,
+                      }),
+                    );
+                    const next = await apiRequest("/v1/victim/demo-customers");
+                    setCatalogue(next);
+                    setSelected(
+                      next.customers.find((p) => p.incident)?.account || "",
+                    );
+                    setBuild({ stage: 4, published: 6, total: 6 });
+                    setTimeout(() => setBuild(null), 1500);
+                  } catch (error) {
+                    ticks.forEach(clearTimeout);
+                    setBuild(null);
+                    throw error;
+                  }
                 })
                 .catch(() => {})
             }
@@ -244,6 +275,14 @@ function Start() {
               ? "Generating your bank and scam…"
               : "Start a fresh practice session"}
           </button>
+          {build && (
+            <BankBuilder
+              stage={build.stage}
+              published={build.published}
+              total={build.total}
+              minutes={timing}
+            />
+          )}
         </div>
       </Card>
       <Card>

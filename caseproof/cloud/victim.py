@@ -149,6 +149,20 @@ def install(app, o):
             "bank_data_preparing": True,
         }
 
+    @app.get("/v1/victim/demo-session/progress")
+    def build_progress(request: Request):
+        """How many of this session's synthetic bank batches BigQuery has published."""
+        row = session_row(request)
+        if not row:
+            raise HTTPException(401, "practice_session_required")
+        ids = sorted(
+            {c["publication_id"] for c in row["catalogue"]["customers"] if c.get("publication_id")}
+        )
+        published = sum(
+            1 for i in ids if (docs.get("bank_publications/" + i) or {}).get("state") == "published"
+        )
+        return {"total": len(ids), "published": published, "ready": published == len(ids)}
+
     @app.post("/v1/victim/sessions")
     def login(body: Session, request: Request, response: Response):
         same_origin(request)

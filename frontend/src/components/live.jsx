@@ -9,7 +9,7 @@ export function Status({ value }) {
   return (
     <Badge
       tone={
-        ["completed", "assessed", "source_supported", "sent"].includes(value)
+        ["completed", "assessed", "done", "source_supported", "sent"].includes(value)
           ? "ok"
           : ["failed", "conflicted"].includes(value)
             ? "crit"

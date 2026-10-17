@@ -129,8 +129,10 @@ export default function Review({ view, reload, stale }) {
               </div>
             )}
             <div className="bound">
-              <div>Revision {s.revision}</div>
-              <div className="hash-text">sha256:{s.digest}</div>
+              <div>Case version {s.revision}</div>
+              <div className="hash-text" title={"sha256:" + s.digest}>
+                Fingerprint {s.digest?.slice(0, 12)}…
+              </div>
             </div>
             <p className="muted">
               New evidence or bank observations require a fresh review. This

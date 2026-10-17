@@ -124,7 +124,10 @@ class CloudBankIngestion:
 
         body = json.loads(row["payload"])
         accounts = {c["account"] for c in body.get("coverage", [])}
-        if row["kind"] == "downstream_reports":
+        if row["kind"] in ("downstream_reports", "complaints"):
+            # A newly processed complaint may link to earlier complaints in the same
+            # tenant; those cases must re-run linking (the filter below keeps it to
+            # cases that share a payee or caller and do not link it yet).
             candidates = self.store.list_cases(row["tenant"])
         else:
             candidates = [
@@ -142,6 +145,34 @@ class CloudBankIngestion:
                 from caseproof.domain.contracts import CaseSnapshot
 
                 snap = CaseSnapshot.model_validate_json(current["data"])
+                if row["kind"] == "complaints":
+                    from caseproof.domain.validator import normalized
+
+                    mine = {
+                        normalized(v)
+                        for v in [m.resolved_fields.get("payee_vpa") for m in snap.ledger_matches]
+                        + [
+                            str(c.normalized_value)
+                            for c in snap.claims
+                            if c.kind in ("payee_vpa", "caller_number")
+                        ]
+                        if v
+                    }
+                    shared = {
+                        normalized(body.get("payee") or ""),
+                        normalized(body.get("caller_number") or ""),
+                    } - {normalized("")}
+                    if (
+                        cid == body["complaint_id"]
+                        or not mine & shared
+                        or any(link.complaint_id == body["complaint_id"] for link in snap.linked)
+                    ):
+                        tx.set(
+                            ack_path,
+                            {"publication": key, "case_id": cid, "irrelevant": True},
+                            create=True,
+                        )
+                        return
                 if row["kind"] == "downstream_reports":
                     known_accounts = {a["id"] for a in snap.trail.get("accounts", [])}
                     payment_ids = {m.txn_id for m in snap.ledger_matches}
