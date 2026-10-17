@@ -12,7 +12,8 @@ A new persistent volume starts with bank records and zero complaints.
 | Automated browser full workflow | 30/30 pass | Two new complaints with actual uploaded PNGs |
 | Accessibility scans | 10 scans, zero reported violations | Sampled victim, queue, overview, trail and delivery screens |
 | Browser uncaught errors | Zero | Automated acceptance run |
-| Fresh full backend regression | RUNNING | Prior complete baseline 313/313; final result to be recorded |
+| Full local backend regression | 316/316 pass, 1340.61s | Windows source mounts; zero failures/skips |
+| Published-snapshot CI | 319/319 backend; 39/39 frontend pass | Clean Ubuntu checkout; includes the three later-added regressions |
 | Static/config checks | Scoped Ruff and configured mypy pass; Compose parses | No cloud apply |
 | Credential-pattern review | 523 text files, no matches | Limited signatures; not an exhaustive secret audit |
 
@@ -32,10 +33,16 @@ or pre-recorded complaint outcome is represented.
 Manual browser testing independently verified the entry screen, empty practice
 queue, account/payment selection, narrative entry, receipt download/file upload,
 and creation of `CASE-418e861b3fda9010` with both evidence items received.
-The Chrome extension subsequently disconnected repeatedly during analyst-tab
-attachment. A fully manual analyst-to-delivery completion is therefore not yet
-claimed; the complete automated browser flow above passed. The same manual case
-can be continued using the demo guide when browser control is restored.
+After recovering the Chrome extension connection, the manual flow also completed:
+analyst reviewed the brief and requested clarification; the victim replied,
+explicitly excluded the unrelated INR 10,500 candidate, and recorded inability to
+supply a clearer receipt. Local OCR left the original receipt unassociated
+(including a payee O/0 mismatch), so the reviewer approved **escalation with gaps**
+at revision 30. Both simulators acknowledged it; owner and follow-up next action
+persisted through reload. Later observation updates created a new revision that
+requires its own review; the original delivered packet remains inspectable.
+Retained input: `eval/corpora/manual_integration_v1/receipt-56000.png`.
+Screenshot: `var/integration-manual/reports-delivered.png` (local evidence).
 
 ## Confirmed issues fixed during integration
 
@@ -47,12 +54,13 @@ can be continued using the demo guide when browser control is restored.
 3. SPA hosting preserves API 404s, denied expired links, no-store/no-referrer,
    request limits and same-origin session cookies rather than a generic fallback.
 
-A separate Lead Technical review found no remaining confirmed code publication
+An additional code-review pass found no remaining confirmed code publication
 blocker after fixes. This is an engineering review, not an independent security
 certification. Runtime image: `sha256:99789878f49f26d0925ef23df2f185469a5536603ea4d44ab7e915a1f027bb65`.
 
 Raw local reports: `var/frontend-validation/quality/acceptance.json`, screenshots
-and `axe-results.json`; `var/readiness/integrated-backend-full.xml` when complete.
+and `axe-results.json`; `var/readiness/integrated-backend-full.xml`. Published-snapshot CI:
+https://github.com/sankalp2515/CaseProof/actions/runs/39013953399 (passed).
 The original failed attempt is preserved in the same local evidence directory.
 
 ## Remaining boundaries

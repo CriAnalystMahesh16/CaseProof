@@ -33,5 +33,7 @@ Google service responses and identity signature verification are explicit double
 in offline contracts. These tests do not measure live Document AI/Gemini quality,
 real Google IAM, human time saved, or production bank integration.
 
-Fresh integrated-package validation is recorded in `docs/INTEGRATION_RESULTS.md`.
+Integrated-package validation: 316 local backend tests; clean-checkout CI
+319 backend and 39 frontend tests; 30 automated browser checks and a complete
+manual escalation/delivery flow. Details: `docs/INTEGRATION_RESULTS.md`.
 Retain failed attempts and limitations alongside rerun results.
